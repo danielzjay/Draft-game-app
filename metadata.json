@@ -1,0 +1,6 @@
+{
+  "name": "Draughts Combat",
+  "description": "An action-packed checkers game with stylized pixel-art characters, combat mechanics, hero leveling, local multiplayer, simulated cloud saves, a global leaderboard, and an interactive local blockchain-verified store.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
