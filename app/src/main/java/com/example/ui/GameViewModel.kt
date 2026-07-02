@@ -97,12 +97,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var validMoves by mutableStateOf<List<Pair<Int, Int>>>(emptyList())
     var validJumps by mutableStateOf<List<Pair<Int, Int>>>(emptyList())
     var turnRed by mutableStateOf(true) // Vanguard starts
-    // When a piece captures and has another jump available from its new square, official rules
-    // require that SAME piece to continue capturing before the turn can pass. This tracks that.
-    var mustContinueJumpPieceId by mutableStateOf<String?>(null)
     var activeCombat by mutableStateOf<CombatState?>(null)
     var winnerMessage by mutableStateOf<String?>(null)
     var isBotThinking by mutableStateOf(false)
+    var activeChainAttackerId by mutableStateOf<String?>(null)
 
     // Simulated Blockchain Verification states
     var isVerifyingBlockchain by mutableStateOf(false)
@@ -761,22 +759,20 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         selectedPiece = null
         validMoves = emptyList()
         validJumps = emptyList()
-        mustContinueJumpPieceId = null
         turnRed = true
         winnerMessage = null
         isBotThinking = false
+        activeChainAttackerId = null
     }
 
     // Handles picking or highlighting pieces
     fun selectPiece(piece: BoardPiece) {
         if (winnerMessage != null || activeCombat != null || isBotThinking) return
-        if (piece.isRed != turnRed) return // Must select own piece
-
-        // A piece mid-chain-capture must finish its capture sequence before any other piece can move
-        if (mustContinueJumpPieceId != null && piece.id != mustContinueJumpPieceId) {
-            triggerNotification("You must continue capturing with the same piece!")
+        if (activeChainAttackerId != null && piece.id != activeChainAttackerId) {
+            triggerNotification("Chain capture in progress! You must complete your jump sequence.")
             return
         }
+        if (piece.isRed != turnRed) return // Must select own piece
 
         selectedPiece = piece
         calculateMovesForPiece(piece)
@@ -867,6 +863,17 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     private fun calculateMovesForPiece(piece: BoardPiece) {
         val (rawMoves, rawJumps) = getMovesAndJumpsForPieceRaw(piece)
 
+        if (activeChainAttackerId != null) {
+            if (piece.id == activeChainAttackerId) {
+                validMoves = emptyList()
+                validJumps = rawJumps
+            } else {
+                validMoves = emptyList()
+                validJumps = emptyList()
+            }
+            return
+        }
+
         // If forced jumps is enabled, check if any of player's pieces has any jumps!
         if (ruleForcedJumps) {
             val myColorPieces = boardPieces.filter { it.isRed == piece.isRed }
@@ -903,6 +910,12 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         calculateMovesForPiece(attacker)
 
         val isJump = validJumps.contains(Pair(toRow, toCol))
+        val isSimpleMove = validMoves.contains(Pair(toRow, toCol))
+
+        if (!isJump && !isSimpleMove) {
+            triggerNotification("Illegal Move Attempted!")
+            return
+        }
 
         if (isJump) {
             // Find the jumped piece along the diagonal path
@@ -926,14 +939,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 executeCombat(attacker, defender, toRow, toCol)
                 return
             }
-            // Jump target claimed but no valid opponent piece found along the path — reject the move
-            return
         } else {
-            // Reject any destination that isn't an actual legal move (defends against stray/invalid
-            // calls, e.g. if forced-jump rules left validMoves empty for this piece).
-            if (!validMoves.contains(Pair(toRow, toCol))) {
-                return
-            }
             // Simple Move: update coordinates
             boardPieces = boardPieces.map {
                 if (it.id == attacker.id) {
@@ -1084,33 +1090,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             }
 
             activeCombat = null
-
-            // --- MANDATORY MULTI-JUMP (CHAIN CAPTURE) ---
-            // Official draughts rules: if the capturing piece has ANOTHER jump available from its
-            // new square, it must keep capturing before the turn passes. Most rule sets also say a
-            // piece that is promoted to King mid-jump stops immediately, even if further jumps exist.
-            val updatedAttacker = updatedPieces.firstOrNull { it.id == attacker.id }
-            val justPromoted = updatedAttacker != null && !attacker.isKing && updatedAttacker.isKing
-
-            if (!attackerDied && updatedAttacker != null && !justPromoted) {
-                val (_, continuedJumps) = getMovesAndJumpsForPieceRaw(updatedAttacker)
-                if (continuedJumps.isNotEmpty()) {
-                    selectedPiece = updatedAttacker
-                    mustContinueJumpPieceId = updatedAttacker.id
-                    validMoves = emptyList()
-                    validJumps = continuedJumps
-                    triggerNotification("Chain capture! ${updatedAttacker.name} must jump again.")
-
-                    if (isVsBot && !updatedAttacker.isRed) {
-                        delay(700)
-                        val nextJump = continuedJumps.random()
-                        moveSelectedPiece(nextJump.first, nextJump.second)
-                    }
-                    return@launch
-                }
-            }
-
-            mustContinueJumpPieceId = null
             endTurn()
         }
     }
@@ -1119,7 +1098,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         selectedPiece = null
         validMoves = emptyList()
         validJumps = emptyList()
-        mustContinueJumpPieceId = null
 
         // Check victory conditions
         val redRemaining = boardPieces.any { it.isRed }
