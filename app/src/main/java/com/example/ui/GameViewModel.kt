@@ -1,12 +1,16 @@
 package com.example.ui
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.auth.GoogleAuthManager
 import com.example.data.*
+import com.example.network.PaymentRepository
+import com.example.network.PaymentResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -97,10 +101,12 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var validMoves by mutableStateOf<List<Pair<Int, Int>>>(emptyList())
     var validJumps by mutableStateOf<List<Pair<Int, Int>>>(emptyList())
     var turnRed by mutableStateOf(true) // Vanguard starts
+    // When a piece captures and has another jump available from its new square, official rules
+    // require that SAME piece to continue capturing before the turn can pass. This tracks that.
+    var mustContinueJumpPieceId by mutableStateOf<String?>(null)
     var activeCombat by mutableStateOf<CombatState?>(null)
     var winnerMessage by mutableStateOf<String?>(null)
     var isBotThinking by mutableStateOf(false)
-    var activeChainAttackerId by mutableStateOf<String?>(null)
 
     // Simulated Blockchain Verification states
     var isVerifyingBlockchain by mutableStateOf(false)
@@ -136,32 +142,99 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     // --- GAME RULES & HELP SYSTEM ---
     var isRulesDialogOpen by mutableStateOf(false)
 
-    // --- PREMIUM PAYMENT PORTAL GATEWAY ---
+    // --- PREMIUM PAYMENT PORTAL GATEWAY (Relworx Mobile Money) ---
     var isPaymentPortalOpen by mutableStateOf(false)
     var paymentPortalPackageName by mutableStateOf("")
-    var paymentPortalPackageCost by mutableStateOf("")
+    var paymentPortalPackageCost by mutableStateOf("") // display string, e.g. "2,000 UGX"
     var paymentPortalPackageCoins by mutableStateOf(0)
+    var paymentPortalAmountUgx by mutableStateOf(0.0) // actual numeric amount charged
 
-    fun openPaymentPortal(name: String, cost: String, coins: Int) {
+    var paymentMobileNumber by mutableStateOf("")
+    var paymentValidatedCustomerName by mutableStateOf<String?>(null)
+    var isValidatingNumber by mutableStateOf(false)
+    var isProcessingPayment by mutableStateOf(false)
+    var paymentStatusMessage by mutableStateOf<String?>(null)
+
+    // TODO: replace with your real Relworx business account number (find it in your Relworx
+    // merchant dashboard). Also set PAYMENT_BACKEND_BASE_URL in your .env — see server/relworxProxy.js.
+    private val paymentRepository = PaymentRepository(accountNo = "RELJH012BV45P")
+
+    fun openPaymentPortal(name: String, cost: String, coins: Int, amountUgx: Double) {
         paymentPortalPackageName = name
         paymentPortalPackageCost = cost
         paymentPortalPackageCoins = coins
+        paymentPortalAmountUgx = amountUgx
+        paymentMobileNumber = ""
+        paymentValidatedCustomerName = null
+        paymentStatusMessage = null
         isPaymentPortalOpen = true
     }
 
-    fun processSimulatedPayment(methodName: String, extraDetails: String) {
+    /** Step 1: confirm the phone number is real before charging it. */
+    fun validatePaymentMobileNumber(msisdn: String) {
+        if (isValidatingNumber) return
+        isValidatingNumber = true
+        paymentValidatedCustomerName = null
+        paymentStatusMessage = null
         viewModelScope.launch {
-            val state = playerState.value ?: return@launch
-            val updatedState = state.copy(draughtCoins = state.draughtCoins + paymentPortalPackageCoins)
-            repository.updatePlayerState(updatedState)
-            
-            repository.mineNewBlock(
-                transactions = "[PAYMENT] via $methodName ($extraDetails) for '$paymentPortalPackageName': +$paymentPortalPackageCoins BLC",
-                costCoins = 0,
-                earnCoins = paymentPortalPackageCoins
+            val result = paymentRepository.validateMobileNumber(msisdn)
+            isValidatingNumber = false
+            result.onSuccess { response ->
+                if (response.success) {
+                    paymentMobileNumber = msisdn
+                    paymentValidatedCustomerName = response.customerName
+                    paymentStatusMessage = "Verified: ${response.customerName ?: msisdn}"
+                } else {
+                    paymentStatusMessage = response.message ?: "Could not verify this number."
+                }
+            }.onFailure {
+                paymentStatusMessage = "Network error while verifying number: ${it.message}"
+            }
+        }
+    }
+
+    /** Step 2 & 3: request payment from the customer, then poll until they approve/decline it. */
+    fun processMobileMoneyPayment() {
+        if (isProcessingPayment || paymentValidatedCustomerName == null) return
+        isProcessingPayment = true
+        paymentStatusMessage = "Sending payment prompt to your phone..."
+        viewModelScope.launch {
+            val initResult = paymentRepository.requestPayment(
+                msisdn = paymentMobileNumber,
+                amount = paymentPortalAmountUgx,
+                description = "Purchase: $paymentPortalPackageName"
             )
-            triggerNotification("Payment Success via $methodName! +$paymentPortalPackageCoins BLC credited.")
-            isPaymentPortalOpen = false
+
+            val internalRef = initResult.getOrNull()?.internalReference
+            if (internalRef == null) {
+                isProcessingPayment = false
+                paymentStatusMessage = "Payment request failed: ${initResult.exceptionOrNull()?.message ?: "unknown error"}"
+                return@launch
+            }
+
+            paymentStatusMessage = "Approve the prompt on your phone to complete payment..."
+            when (val outcome = paymentRepository.pollUntilResolved(internalRef)) {
+                is PaymentResult.Success -> {
+                    val state = playerState.value ?: PlayerState()
+                    val updatedState = state.copy(draughtCoins = state.draughtCoins + paymentPortalPackageCoins)
+                    repository.updatePlayerState(updatedState)
+                    repository.mineNewBlock(
+                        transactions = "[PAYMENT] Relworx mobile money for '$paymentPortalPackageName': +$paymentPortalPackageCoins BLC (ref $internalRef)",
+                        costCoins = 0,
+                        earnCoins = paymentPortalPackageCoins
+                    )
+                    paymentStatusMessage = "Payment confirmed! +$paymentPortalPackageCoins BLC credited."
+                    triggerNotification("Payment successful via ${outcome.status.provider ?: "Mobile Money"}!")
+                    isPaymentPortalOpen = false
+                }
+                is PaymentResult.Failed -> {
+                    paymentStatusMessage = "Payment failed: ${outcome.reason}"
+                }
+                is PaymentResult.Pending -> {
+                    paymentStatusMessage = "Still waiting on approval — check your phone, then tap Check Status."
+                }
+            }
+            isProcessingPayment = false
         }
     }
 
@@ -643,7 +716,16 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var iapPurchaseSuccessMessage by mutableStateOf<String?>(null)
 
     // --- ADMIN REMOTE CONTROL PANEL ---
-    var isAdminPanelVisible by mutableStateOf(false)
+    // No UI currently opens this (there's no button that sets it true) — it's dead code today.
+    // If you ever wire a trigger to it, gate that trigger behind BuildConfig.DEBUG so it's
+    // physically impossible to reach in a release APK. A client-side boolean like this is not
+    // real access control: anyone who finds the trigger gets free currency and combat cheats.
+    // Real admin tooling belongs server-side (e.g. a Firestore doc only your backend/Cloud
+    // Function writes to), never as a switch inside the app itself.
+    private var _isAdminPanelVisible by mutableStateOf(false)
+    var isAdminPanelVisible: Boolean
+        get() = _isAdminPanelVisible
+        set(value) { _isAdminPanelVisible = value && com.example.BuildConfig.DEBUG }
     var adminCoinGrantAmount by mutableStateOf("500")
     var adminCustomBotDifficulty by mutableStateOf("Medium")
     var adminGlobalModifier by mutableStateOf("None") // None, Double XP, Midas Touch, One Hit KO
@@ -664,6 +746,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     init {
+        restoreGoogleSession()
         // Reset board once heroes are loaded from database
         viewModelScope.launch {
             heroes.collect { heroList ->
@@ -759,20 +842,22 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         selectedPiece = null
         validMoves = emptyList()
         validJumps = emptyList()
+        mustContinueJumpPieceId = null
         turnRed = true
         winnerMessage = null
         isBotThinking = false
-        activeChainAttackerId = null
     }
 
     // Handles picking or highlighting pieces
     fun selectPiece(piece: BoardPiece) {
         if (winnerMessage != null || activeCombat != null || isBotThinking) return
-        if (activeChainAttackerId != null && piece.id != activeChainAttackerId) {
-            triggerNotification("Chain capture in progress! You must complete your jump sequence.")
+        if (piece.isRed != turnRed) return // Must select own piece
+
+        // A piece mid-chain-capture must finish its capture sequence before any other piece can move
+        if (mustContinueJumpPieceId != null && piece.id != mustContinueJumpPieceId) {
+            triggerNotification("You must continue capturing with the same piece!")
             return
         }
-        if (piece.isRed != turnRed) return // Must select own piece
 
         selectedPiece = piece
         calculateMovesForPiece(piece)
@@ -863,17 +948,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     private fun calculateMovesForPiece(piece: BoardPiece) {
         val (rawMoves, rawJumps) = getMovesAndJumpsForPieceRaw(piece)
 
-        if (activeChainAttackerId != null) {
-            if (piece.id == activeChainAttackerId) {
-                validMoves = emptyList()
-                validJumps = rawJumps
-            } else {
-                validMoves = emptyList()
-                validJumps = emptyList()
-            }
-            return
-        }
-
         // If forced jumps is enabled, check if any of player's pieces has any jumps!
         if (ruleForcedJumps) {
             val myColorPieces = boardPieces.filter { it.isRed == piece.isRed }
@@ -910,12 +984,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         calculateMovesForPiece(attacker)
 
         val isJump = validJumps.contains(Pair(toRow, toCol))
-        val isSimpleMove = validMoves.contains(Pair(toRow, toCol))
-
-        if (!isJump && !isSimpleMove) {
-            triggerNotification("Illegal Move Attempted!")
-            return
-        }
 
         if (isJump) {
             // Find the jumped piece along the diagonal path
@@ -939,7 +1007,14 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 executeCombat(attacker, defender, toRow, toCol)
                 return
             }
+            // Jump target claimed but no valid opponent piece found along the path — reject the move
+            return
         } else {
+            // Reject any destination that isn't an actual legal move (defends against stray/invalid
+            // calls, e.g. if forced-jump rules left validMoves empty for this piece).
+            if (!validMoves.contains(Pair(toRow, toCol))) {
+                return
+            }
             // Simple Move: update coordinates
             boardPieces = boardPieces.map {
                 if (it.id == attacker.id) {
@@ -1090,6 +1165,33 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             }
 
             activeCombat = null
+
+            // --- MANDATORY MULTI-JUMP (CHAIN CAPTURE) ---
+            // Official draughts rules: if the capturing piece has ANOTHER jump available from its
+            // new square, it must keep capturing before the turn passes. Most rule sets also say a
+            // piece that is promoted to King mid-jump stops immediately, even if further jumps exist.
+            val updatedAttacker = updatedPieces.firstOrNull { it.id == attacker.id }
+            val justPromoted = updatedAttacker != null && !attacker.isKing && updatedAttacker.isKing
+
+            if (!attackerDied && updatedAttacker != null && !justPromoted) {
+                val (_, continuedJumps) = getMovesAndJumpsForPieceRaw(updatedAttacker)
+                if (continuedJumps.isNotEmpty()) {
+                    selectedPiece = updatedAttacker
+                    mustContinueJumpPieceId = updatedAttacker.id
+                    validMoves = emptyList()
+                    validJumps = continuedJumps
+                    triggerNotification("Chain capture! ${updatedAttacker.name} must jump again.")
+
+                    if (isVsBot && !updatedAttacker.isRed) {
+                        delay(700)
+                        val nextJump = continuedJumps.random()
+                        moveSelectedPiece(nextJump.first, nextJump.second)
+                    }
+                    return@launch
+                }
+            }
+
+            mustContinueJumpPieceId = null
             endTurn()
         }
     }
@@ -1098,6 +1200,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         selectedPiece = null
         validMoves = emptyList()
         validJumps = emptyList()
+        mustContinueJumpPieceId = null
 
         // Check victory conditions
         val redRemaining = boardPieces.any { it.isRed }
@@ -1378,41 +1481,49 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     // --- NEW INTERACTIVE FEATURE ACTIONS ---
 
-    // Google Sign-In Simulation
-    fun startGoogleSignIn(onSuccess: () -> Unit = {}) {
-        startGoogleSignInCustom("mukasadaniel.daniel@gmail.com", "Daniel Mukasa", onSuccess)
-    }
-
-    fun startGoogleSignInCustom(email: String, name: String, onSuccess: () -> Unit = {}) {
+    // Real Google Sign-In (Credential Manager + Firebase Auth). Requires a Context, which the UI
+    // passes in from LocalContext.current — the ViewModel never holds onto it beyond this call.
+    fun startGoogleSignIn(context: Context, onSuccess: () -> Unit = {}) {
         if (isGoogleSignedIn || isSigningInGoogle) return
         isSigningInGoogle = true
         viewModelScope.launch {
-            delay(1500) // Simulating secure authorization handshake
-            val state = playerState.value ?: PlayerState()
-            signedInEmail = email
-            isGoogleSignedIn = true
+            val result = GoogleAuthManager.signIn(context)
             isSigningInGoogle = false
-            
-            // Rename player in local state to match Google identity
-            val updatedState = state.copy(playerName = name)
-            repository.updatePlayerState(updatedState)
-            
-            triggerNotification("Signed in as $email via Google Secure Auth!")
-            
-            // Record login block in blockchain ledger
-            repository.mineNewBlock(
-                transactions = "[AUTH] Google Login Verified: $email",
-                costCoins = 0,
-                earnCoins = 0
-            )
-            onSuccess()
+
+            result.onSuccess { user ->
+                val email = user.email ?: "unknown@gmail.com"
+                val name = user.displayName ?: "Google Player"
+                signedInEmail = email
+                isGoogleSignedIn = true
+
+                val state = playerState.value ?: PlayerState()
+                repository.updatePlayerState(state.copy(playerName = name))
+
+                triggerNotification("Signed in as $email")
+                repository.mineNewBlock(
+                    transactions = "[AUTH] Google Login Verified: $email",
+                    costCoins = 0,
+                    earnCoins = 0
+                )
+                onSuccess()
+            }.onFailure { error ->
+                triggerNotification(error.message ?: "Google Sign-In failed.")
+            }
         }
     }
 
-    fun googleSignOut() {
-        isGoogleSignedIn = false
-        signedInEmail = null
+    /** Call once on app start (e.g. from MainActivity/init) to restore a previous session. */
+    fun restoreGoogleSession() {
+        val user = GoogleAuthManager.currentUser() ?: return
+        signedInEmail = user.email
+        isGoogleSignedIn = true
+    }
+
+    fun googleSignOut(context: Context) {
         viewModelScope.launch {
+            GoogleAuthManager.signOut(context)
+            isGoogleSignedIn = false
+            signedInEmail = null
             val state = playerState.value ?: PlayerState()
             repository.updatePlayerState(state.copy(playerName = "Guest Vanguard"))
             triggerNotification("Signed out of Google Account.")
