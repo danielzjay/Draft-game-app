@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -1925,6 +1926,22 @@ fun LeaderboardScreen(viewModel: GameViewModel) {
             fontSize = 16.sp,
             fontWeight = FontWeight.Black
         )
+
+        if (viewModel.isOnlineLeaderboard) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                Box(modifier = Modifier.size(6.dp).background(Color(0xFF00E676), CircleShape))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("LIVE — real players, updates as anyone plays", color = Color(0xFF00E676), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+        } else {
+            Text(
+                "Showing local-only placeholder rankings — sign in with Google (Profile tab) to appear on the real global leaderboard.",
+                color = TextGray,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+
         Text(
             text = "Earn MMR points by defeating opponents in single-player campaigns and rise to the apex ranking tier.",
             color = TextGray,
@@ -2039,6 +2056,7 @@ fun SyncScreen(viewModel: GameViewModel) {
     val state by viewModel.playerState.collectAsState()
     val syncTime = state?.lastSyncedTime ?: 0L
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -2098,7 +2116,7 @@ fun SyncScreen(viewModel: GameViewModel) {
                         CircularProgressIndicator(color = AmberGold, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else if (viewModel.isGoogleSignedIn) {
                         Button(
-                            onClick = { viewModel.googleSignOut() },
+                            onClick = { viewModel.googleSignOut(context) },
                             colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
                             contentPadding = PaddingValues(horizontal = 8.dp),
                             modifier = Modifier.height(28.dp)
@@ -2570,10 +2588,12 @@ fun SyncScreen(viewModel: GameViewModel) {
                 )
 
                 // Render 3 purchase items
+                // NOTE: prices are now in UGX, not GBP — Relworx does no currency conversion and
+                // only supports UGX/KES/TZS mobile money. Adjust these to your real pricing.
                 val packages = listOf(
-                    Triple("Gladiator Sack", "+500 BLC", "£1.99"),
-                    Triple("Vanguard Chest", "+2,000 BLC", "£5.99"),
-                    Triple("Emperor's Vault", "+10,000 BLC", "£19.99")
+                    Triple("Gladiator Sack", "+500 BLC", "5,000 UGX"),
+                    Triple("Vanguard Chest", "+2,000 BLC", "15,000 UGX"),
+                    Triple("Emperor's Vault", "+10,000 BLC", "50,000 UGX")
                 )
 
                 Row(
@@ -2590,7 +2610,12 @@ fun SyncScreen(viewModel: GameViewModel) {
                                     "Vanguard Chest" -> 2000
                                     else -> 10000
                                 }
-                                viewModel.openPaymentPortal(pkg.first, pkg.third, coinsReward)
+                                val amountUgx = when (pkg.first) {
+                                    "Gladiator Sack" -> 5000.0
+                                    "Vanguard Chest" -> 15000.0
+                                    else -> 50000.0
+                                }
+                                viewModel.openPaymentPortal(pkg.first, pkg.third, coinsReward, amountUgx)
                             }
                         ) {
                             Column(
@@ -2955,6 +2980,14 @@ fun SyncScreen(viewModel: GameViewModel) {
         Spacer(modifier = Modifier.height(12.dp))
 
         // SECTION 9: Remote Administration Control Console
+        // Now that Google Sign-In is real, this check uses your genuine authenticated email —
+        // but it's still enforced entirely on-device. It hides the panel from other players in
+        // the normal app, but it is NOT real access control: anyone with a decompiler could
+        // patch this condition out of a rebuilt APK and reach adminGrantCoins()/adminApplyModifier()
+        // regardless of who's signed in, since nothing here is verified by a server. That's fine
+        // for a single-player local economy (worst case, someone cheats their own save file), but
+        // don't rely on this if coins ever back something server-authoritative like a shared
+        // leaderboard or a cash-out feature.
         val isUserAdmin = viewModel.isGoogleSignedIn && viewModel.signedInEmail == "mukasadaniel.daniel@gmail.com"
 
         if (isUserAdmin) {
@@ -3304,6 +3337,7 @@ fun CombatCharacterCard(
 fun ProfileManagementDialog(viewModel: GameViewModel) {
     val playerState by viewModel.playerState.collectAsState()
     var tempName by remember { mutableStateOf(playerState?.playerName ?: "") }
+    val context = LocalContext.current
 
     Dialog(
         onDismissRequest = { viewModel.isProfileDialogOpen = false },
@@ -3544,7 +3578,7 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
                             Text(viewModel.signedInEmail ?: "Daniel Mukasa", color = TextWhite, fontSize = 10.sp)
                         }
                         Button(
-                            onClick = { viewModel.googleSignOut() },
+                            onClick = { viewModel.googleSignOut(context) },
                             colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
                             contentPadding = PaddingValues(horizontal = 8.dp),
                             modifier = Modifier.height(28.dp)
@@ -3599,8 +3633,14 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
 
 @Composable
 fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
+    // This used to draw a fake "choose an account" list inside the app — that's a dangerous
+    // pattern (it looks exactly like a phishing screen impersonating Google's real picker), so
+    // it's gone. Real Google Sign-In shows Google's OWN system-rendered account picker via the
+    // Credential Manager API; this dialog is now just a simple explainer + trigger button.
+    val context = LocalContext.current
+
     Dialog(
-        onDismissRequest = { viewModel.isGoogleAuthDialogOpen = false },
+        onDismissRequest = { if (!viewModel.isSigningInGoogle) viewModel.isGoogleAuthDialogOpen = false },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
@@ -3612,18 +3652,14 @@ fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
                 .padding(16.dp)
         ) {
             Column(
-                modifier = Modifier
-                    .padding(24.dp)
-                    .verticalScroll(rememberScrollState()),
+                modifier = Modifier.padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Top Google representation
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Modern styled G icon
                     Box(
                         modifier = Modifier
                             .size(36.dp)
@@ -3651,7 +3687,7 @@ fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = "AI Studio Combat Draughts requests permission to access your Google account to secure cloud saves and register your profile for official online match tournaments.",
+                    text = "Link your Google account to save your progress and play online matches. You'll pick your account on Google's own sign-in screen.",
                     color = TextGray,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
@@ -3665,147 +3701,24 @@ fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
                         modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator(
-                            color = Color(0xFF4285F4),
-                            modifier = Modifier.size(40.dp)
-                        )
+                        CircularProgressIndicator(color = Color(0xFF4285F4), modifier = Modifier.size(40.dp))
                         Spacer(modifier = Modifier.height(14.dp))
-                        Text(
-                            "Performing Secure Authorization Handshake...",
-                            color = AmberGold,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            "Verifying SHA-256 app cert signature and cryptographic keys",
-                            color = TextMuted,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        Text("Waiting on Google...", color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                 } else {
-                    Text(
-                        text = "CHOOSE CHANNELS ACCOUNT",
-                        color = Color(0xFF4285F4),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)
-                    )
-
-                    // 1. Primary Verified User Account
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-                        border = BorderStroke(1.dp, Color(0x334285F4)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                viewModel.startGoogleSignIn {
-                                    viewModel.isGoogleAuthDialogOpen = false
-                                }
+                    Button(
+                        onClick = {
+                            viewModel.startGoogleSignIn(context) {
+                                viewModel.isGoogleAuthDialogOpen = false
                             }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(Color(0xFF4285F4), CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "DM",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Daniel Mukasa",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "mukasadaniel.daniel@gmail.com",
-                                    color = TextGray,
-                                    fontSize = 11.sp
-                                )
-                            }
-                            Icon(
-                                Icons.Default.Verified,
-                                contentDescription = "Verified User",
-                                tint = Color(0xFF4285F4),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // 2. Alternative Guest Account
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161B22)),
-                        border = BorderStroke(1.dp, Color(0x11FFFFFF)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                viewModel.startGoogleSignInCustom("challenger.vanguard@gmail.com", "Vanguard Challenger") {
-                                    viewModel.isGoogleAuthDialogOpen = false
-                                }
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .background(Color.Gray, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "VC",
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "Vanguard Challenger",
-                                    color = Color.White,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    "challenger.vanguard@gmail.com",
-                                    color = TextGray,
-                                    fontSize = 11.sp
-                                )
-                            }
-                        }
+                        Text("CONTINUE WITH GOOGLE", color = Color(0xFF1F1F1F), fontSize = 12.sp, fontWeight = FontWeight.Black)
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
-
-                    // Privacy disclosure
-                    Text(
-                        text = "By continuing, Google will share your name, email address, language preference, and profile picture with AI Studio Draughts. See Privacy Policy and Terms of Use.",
-                        color = TextMuted,
-                        fontSize = 9.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 13.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(18.dp))
 
                     Button(
                         onClick = { viewModel.isGoogleAuthDialogOpen = false },
@@ -3990,37 +3903,29 @@ fun GameRulesHelpDialog(viewModel: GameViewModel) {
 // ==================== DIALOG 4: PREMIUM PAYMENT PORTAL ====================
 @Composable
 fun PremiumPaymentPortalDialog(viewModel: GameViewModel) {
-    var selectedMethod by remember { mutableStateOf(0) } // 0 = Google Play IAP, 1 = PayPal, 2 = Mobile Money (Flutterwave/Relworx)
-    var stepState by remember { mutableStateOf("input") } // "input", "google_sheet", "loading", "ussd_pin"
-
-    // Form inputs
-    var mmPhoneNumber by remember { mutableStateOf("") }
-    var mmCountry by remember { mutableStateOf("Uganda 🇺🇬") }
-    var mmOperator by remember { mutableStateOf("MTN Mobile Money") }
-    var paypalEmail by remember { mutableStateOf("") }
-    var userPinCode by remember { mutableStateOf("") }
-
-    var expandedCountry by remember { mutableStateOf(false) }
-    var expandedOperator by remember { mutableStateOf(false) }
+    // Real Relworx Mobile Money checkout. Google Play Billing and PayPal are not wired up (they
+    // need their own SDKs — Play Billing Library / PayPal SDK — which aren't in this project),
+    // so this dialog only offers Mobile Money, which now talks to your backend proxy for real.
+    //
+    // IMPORTANT: the PIN-entry step that used to be here has been removed on purpose. A
+    // legitimate mobile money integration NEVER asks for the customer's PIN inside a third-party
+    // app — the network operator sends an approval prompt straight to the customer's own phone
+    // (a USSD pop-up or app notification), and they approve it there. An app that asks for the
+    // PIN itself is indistinguishable from a PIN-phishing screen, so it's gone.
 
     Dialog(
-        onDismissRequest = { viewModel.isPaymentPortalOpen = false },
+        onDismissRequest = { if (!viewModel.isProcessingPayment) viewModel.isPaymentPortalOpen = false },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.85f)
                 .padding(16.dp),
             shape = RoundedCornerShape(12.dp),
             color = DarkSurface,
             border = BorderStroke(1.5.dp, AmberGold)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp)
-            ) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 // Header
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -4028,23 +3933,20 @@ fun PremiumPaymentPortalDialog(viewModel: GameViewModel) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Payments, contentDescription = null, tint = AmberGold, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = AmberGold, modifier = Modifier.size(24.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Column {
+                            Text("MOBILE MONEY CHECKOUT", color = AmberGold, fontSize = 13.sp, fontWeight = FontWeight.Black)
                             Text(
-                                "PREMIUM COINS CHECKOUT",
-                                color = AmberGold,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Black
-                            )
-                            Text(
-                                "Package: ${viewModel.paymentPortalPackageName} (${viewModel.paymentPortalPackageCost})",
+                                "${viewModel.paymentPortalPackageName} — ${viewModel.paymentPortalPackageCost}",
                                 color = TextWhite,
                                 fontSize = 10.sp
                             )
                         }
                     }
-                    IconButton(onClick = { viewModel.isPaymentPortalOpen = false }) {
+                    IconButton(
+                        onClick = { if (!viewModel.isProcessingPayment) viewModel.isPaymentPortalOpen = false }
+                    ) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = TextWhite)
                     }
                 }
@@ -4053,366 +3955,74 @@ fun PremiumPaymentPortalDialog(viewModel: GameViewModel) {
                 Divider(color = Color(0x1AFFFFFF))
                 Spacer(modifier = Modifier.height(12.dp))
 
-                if (stepState == "input") {
-                    // Step 1: Selector Tabs
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        val methods = listOf(
-                            Triple(0, Icons.Default.CreditCard, "Google IAP"),
-                            Triple(1, Icons.Default.Language, "PayPal"),
-                            Triple(2, Icons.Default.PhoneAndroid, "Mobile Money")
-                        )
-                        methods.forEach { (id, icon, label) ->
-                            Button(
-                                onClick = { selectedMethod = id },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (selectedMethod == id) AmberGold else Color.Black
-                                ),
-                                border = BorderStroke(1.dp, if (selectedMethod == id) AmberGold else Color.DarkGray),
-                                modifier = Modifier.weight(1f).height(44.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                    Icon(icon, contentDescription = null, tint = if (selectedMethod == id) DarkBg else TextWhite, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = label,
-                                        color = if (selectedMethod == id) DarkBg else TextWhite,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                            }
-                        }
-                    }
+                Text(
+                    "Enter your MTN or Airtel Uganda mobile money number. We'll verify it, then send a payment prompt straight to your phone — approve it there to complete the purchase.",
+                    color = TextGray,
+                    fontSize = 10.sp,
+                    lineHeight = 14.sp
+                )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                    // Step 2: Specific payment details
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        when (selectedMethod) {
-                            0 -> {
-                                // Google IAP Info Block
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = Color.Black),
-                                    border = BorderStroke(1.dp, Color(0x22FFFFFF)),
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("STANDARD GOOGLE PLAY BILLING", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            "Pay securely using standard credit cards, debit cards, or Google Play store balance linked to your Google Account.",
-                                            color = TextGray,
-                                            fontSize = 9.sp,
-                                            lineHeight = 13.sp
-                                        )
-                                    }
-                                }
-                            }
-                            1 -> {
-                                // PayPal input
-                                Text("Enter PayPal account email address:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                OutlinedTextField(
-                                    value = paypalEmail,
-                                    onValueChange = { paypalEmail = it },
-                                    placeholder = { Text("username@domain.com", color = Color.Gray) },
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = AmberGold,
-                                        unfocusedBorderColor = Color.DarkGray,
-                                        focusedContainerColor = Color.Black,
-                                        unfocusedContainerColor = Color.Black
-                                    ),
-                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
-                                )
-                            }
-                            2 -> {
-                                // Mobile money panel
-                                Text("INTEGRATED FLUTTERWAVE & RELWORX GATEWAY", color = Color(0xFF00E676), fontSize = 11.sp, fontWeight = FontWeight.Black)
-                                Text(
-                                    "Direct mobile money billing for Uganda 🇺🇬, Kenya 🇰🇪, and Tanzania 🇹🇿 users.",
-                                    color = TextGray,
-                                    fontSize = 9.sp,
-                                    modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                                )
+                OutlinedTextField(
+                    value = viewModel.paymentMobileNumber,
+                    onValueChange = {
+                        viewModel.paymentMobileNumber = it
+                        viewModel.paymentValidatedCustomerName = null
+                    },
+                    label = { Text("Phone number, e.g. +256701345678") },
+                    enabled = !viewModel.isValidatingNumber && !viewModel.isProcessingPayment,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AmberGold,
+                        unfocusedBorderColor = Color.DarkGray,
+                        focusedContainerColor = Color.Black,
+                        unfocusedContainerColor = Color.Black
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                )
 
-                                // Select Country
-                                Text("Select Country:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Box(modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)) {
-                                    Button(
-                                        onClick = { expandedCountry = true },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                                        border = BorderStroke(1.dp, Color.DarkGray),
-                                        modifier = Modifier.fillMaxWidth().height(40.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(mmCountry, color = TextWhite, fontSize = 11.sp)
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AmberGold)
-                                        }
-                                    }
-                                    DropdownMenu(
-                                        expanded = expandedCountry,
-                                        onDismissRequest = { expandedCountry = false },
-                                        modifier = Modifier.background(Color.Black).border(1.dp, Color.DarkGray)
-                                    ) {
-                                        listOf("Uganda 🇺🇬", "Kenya 🇰🇪", "Tanzania 🇹🇿").forEach { country ->
-                                            DropdownMenuItem(
-                                                text = { Text(country, color = TextWhite, fontSize = 11.sp) },
-                                                onClick = {
-                                                    mmCountry = country
-                                                    // Set default operators based on country selection
-                                                    mmOperator = when (country) {
-                                                        "Uganda 🇺🇬" -> "MTN Mobile Money"
-                                                        "Kenya 🇰🇪" -> "Safaricom M-Pesa"
-                                                        else -> "Vodacom M-Pesa"
-                                                    }
-                                                    expandedCountry = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
+                Spacer(modifier = Modifier.height(10.dp))
 
-                                // Select Operator
-                                Text("Select Network Provider:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Box(modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)) {
-                                    Button(
-                                        onClick = { expandedOperator = true },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                                        border = BorderStroke(1.dp, Color.DarkGray),
-                                        modifier = Modifier.fillMaxWidth().height(40.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(mmOperator, color = TextWhite, fontSize = 11.sp)
-                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AmberGold)
-                                        }
-                                    }
-                                    DropdownMenu(
-                                        expanded = expandedOperator,
-                                        onDismissRequest = { expandedOperator = false },
-                                        modifier = Modifier.background(Color.Black).border(1.dp, Color.DarkGray)
-                                    ) {
-                                        val operators = when (mmCountry) {
-                                            "Uganda 🇺🇬" -> listOf("MTN Mobile Money", "Airtel Money")
-                                            "Kenya 🇰🇪" -> listOf("Safaricom M-Pesa", "Airtel Money")
-                                            else -> listOf("Vodacom M-Pesa", "Tigo Pesa", "Airtel Money")
-                                        }
-                                        operators.forEach { op ->
-                                            DropdownMenuItem(
-                                                text = { Text(op, color = TextWhite, fontSize = 11.sp) },
-                                                onClick = {
-                                                    mmOperator = op
-                                                    expandedOperator = false
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Phone number field
-                                val phonePrefix = when (mmCountry) {
-                                    "Uganda 🇺🇬" -> "+256"
-                                    "Kenya 🇰🇪" -> "+254"
-                                    else -> "+255"
-                                }
-                                Text("Mobile Money Phone Number ($phonePrefix):", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                OutlinedTextField(
-                                    value = mmPhoneNumber,
-                                    onValueChange = { mmPhoneNumber = it.filter { char -> char.isDigit() } },
-                                    placeholder = { Text("772123456", color = Color.Gray) },
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = AmberGold,
-                                        unfocusedBorderColor = Color.DarkGray,
-                                        focusedContainerColor = Color.Black,
-                                        unfocusedContainerColor = Color.Black
-                                    ),
-                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 12.dp),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Action Proceed Button
+                if (viewModel.paymentValidatedCustomerName == null) {
                     Button(
-                        onClick = {
-                            if (selectedMethod == 0) {
-                                stepState = "google_sheet"
-                            } else if (selectedMethod == 1) {
-                                if (paypalEmail.isNotEmpty() && paypalEmail.contains("@")) {
-                                    stepState = "loading"
-                                } else {
-                                    viewModel.triggerNotification("Error: Please enter a valid PayPal email.")
-                                }
-                            } else {
-                                if (mmPhoneNumber.length >= 7) {
-                                    stepState = "loading"
-                                } else {
-                                    viewModel.triggerNotification("Error: Please enter a valid phone number.")
-                                }
-                            }
-                        },
+                        onClick = { viewModel.validatePaymentMobileNumber(viewModel.paymentMobileNumber) },
+                        enabled = viewModel.paymentMobileNumber.length >= 10 && !viewModel.isValidatingNumber,
                         colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
                         modifier = Modifier.fillMaxWidth().height(42.dp)
                     ) {
-                        Text(
-                            text = if (selectedMethod == 0) "OPEN SECURE GOOGLE BILLING" else if (selectedMethod == 1) "CONNECT PAYPAL SECURE" else "INITIATE EAST AFRICA PAY",
-                            color = DarkBg,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                } else if (stepState == "google_sheet") {
-                    // Google Play simulated overlay
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E293B)),
-                            border = BorderStroke(1.5.dp, Color(0xFF3B82F6)),
-                            modifier = Modifier.fillMaxWidth().padding(12.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.Language, contentDescription = null, tint = Color(0xFF3B82F6), modifier = Modifier.size(24.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Google Play Billing", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(viewModel.paymentPortalPackageName, color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Text(viewModel.paymentPortalPackageCost, color = Color(0xFF00E676), fontSize = 15.sp, fontWeight = FontWeight.Black)
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("Secure verification with linked credit card (**** 4321)", color = TextGray, fontSize = 9.sp)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                Button(
-                                    onClick = {
-                                        stepState = "loading"
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
-                                    modifier = Modifier.fillMaxWidth().height(40.dp)
-                                ) {
-                                    Text("CONFIRM SIMULATED TOUCH-ID TO PAY", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                                }
-                            }
-                        }
-                    }
-                } else if (stepState == "loading") {
-                    // Loading handshake
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(color = AmberGold, modifier = Modifier.size(48.dp))
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = if (selectedMethod == 0) "CONTACTING GOOGLE SECURE HANDSHAKE..."
-                                   else if (selectedMethod == 1) "AUTHORIZING SECURE PAYPAL TRANSACTION..."
-                                   else "FLUTTERWAVE GATEWAY: DISPATCHING MOBILE USSD CHALLENGE...",
-                            color = TextWhite,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-
-                    // Simulated delay
-                    LaunchedEffect(Unit) {
-                        delay(2000)
-                        if (selectedMethod == 2) {
-                            stepState = "ussd_pin"
+                        if (viewModel.isValidatingNumber) {
+                            CircularProgressIndicator(color = DarkBg, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         } else {
-                            // Instant success for IAP and Paypal
-                            val methodLabel = if (selectedMethod == 0) "GooglePlayIap" else "PayPal"
-                            val methodDetail = if (selectedMethod == 0) "visa_4321" else paypalEmail
-                            viewModel.processSimulatedPayment(methodLabel, methodDetail)
+                            Text("VERIFY NUMBER", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Black)
                         }
                     }
-                } else if (stepState == "ussd_pin") {
-                    // Mobile Money PIN input simulating USSD overlay
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
+                } else {
+                    Button(
+                        onClick = { viewModel.processMobileMoneyPayment() },
+                        enabled = !viewModel.isProcessingPayment,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
                     ) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
-                            border = BorderStroke(1.5.dp, Color(0xFFFFB300)),
-                            modifier = Modifier.fillMaxWidth().padding(12.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Default.PhoneAndroid, contentDescription = null, tint = Color(0xFFFFB300), modifier = Modifier.size(24.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("MOBILE USSD PROMPT PUSH", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text("Pay Flutterwave / Relworx for ${viewModel.paymentPortalPackageName}", color = TextWhite, fontSize = 11.sp, textAlign = TextAlign.Center)
-                                Text("Amount: ${viewModel.paymentPortalPackageCost}", color = AmberGold, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                Text("Enter your 4-digit Mobile Money PIN to authorize:", color = TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                OutlinedTextField(
-                                    value = userPinCode,
-                                    onValueChange = { userPinCode = it.filter { char -> char.isDigit() }.take(4) },
-                                    placeholder = { Text("****", color = Color.Gray) },
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
-                                        focusedBorderColor = Color(0xFFFFB300),
-                                        unfocusedBorderColor = Color.DarkGray,
-                                        focusedContainerColor = Color.Black,
-                                        unfocusedContainerColor = Color.Black
-                                    ),
-                                    modifier = Modifier.width(120.dp).padding(top = 4.dp),
-                                    singleLine = true,
-                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
-                                )
-
-                                Spacer(modifier = Modifier.height(16.dp))
-                                
-                                Button(
-                                    onClick = {
-                                        if (userPinCode.length >= 4) {
-                                            viewModel.processSimulatedPayment("FlutterwaveMM", "$mmOperator, $mmPhoneNumber")
-                                        } else {
-                                            viewModel.triggerNotification("Error: Please enter your 4-digit mobile money PIN.")
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
-                                    modifier = Modifier.fillMaxWidth().height(40.dp)
-                                ) {
-                                    Text("CONFIRM SECURE PIN PAYMENT", color = DarkBg, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                                }
-                            }
+                        if (viewModel.isProcessingPayment) {
+                            CircularProgressIndicator(color = DarkBg, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text(
+                                "PAY ${viewModel.paymentPortalPackageCost} (${viewModel.paymentValidatedCustomerName})",
+                                color = DarkBg,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black
+                            )
                         }
                     }
+                }
+
+                viewModel.paymentStatusMessage?.let { msg ->
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(msg, color = TextWhite, fontSize = 10.sp, lineHeight = 14.sp)
                 }
             }
         }
