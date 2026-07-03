@@ -4,16 +4,19 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.auth.GoogleAuthManager
 import com.example.data.*
+import com.example.network.LeaderboardRepository
 import com.example.network.PaymentRepository
 import com.example.network.PaymentResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -85,7 +88,36 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         initialValue = emptyList()
     )
 
-    val leaderboard: StateFlow<List<LeaderboardEntry>> = repository.leaderboard.stateIn(
+    // Real, shared leaderboard via Firestore — everyone who signs in with Google sees the same
+    // live list (see LeaderboardRepository). Falls back to your old local Room seed data ONLY
+    // when you're not signed in, since there's no shared identity to publish or read scores as
+    // in that case, and an empty screen would be a worse experience than at least showing
+    // something (clearly labelled as local-only in the UI's isOnlineLeaderboard flag below).
+    var isOnlineLeaderboard by mutableStateOf(false)
+    private val localLeaderboard: StateFlow<List<LeaderboardEntry>> = repository.leaderboard.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    private val onlineLeaderboard: StateFlow<List<LeaderboardEntry>> = LeaderboardRepository.observeTopEntries()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+    val leaderboard: StateFlow<List<LeaderboardEntry>> = combine(
+        localLeaderboard,
+        onlineLeaderboard,
+        snapshotFlow { isGoogleSignedIn }
+    ) { local, online, signedIn ->
+        if (signedIn && online.isNotEmpty()) {
+            isOnlineLeaderboard = true
+            online
+        } else {
+            isOnlineLeaderboard = false
+            local
+        }
+    }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
@@ -1044,6 +1076,15 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 defCounter = 0
                 combatLog = "CLASSICAL RULES: ${attacker.name} instantly captured ${defender.name}!"
             } else {
+                // IMPORTANT DESIGN NOTE: a jumped piece is ALWAYS captured, per standard draughts
+                // rules — that part never changes based on "damage". Previously that meant every
+                // ability that only boosted attDamage (Flame Strike, Poison Strike, Critical
+                // Strike) was purely cosmetic: the number shown in the combat popup changed, but
+                // nothing about the match was actually different. To make those abilities matter,
+                // a strike that lands harder than a normal hit now also cuts into the defender's
+                // parting counterattack — you hit so hard they can't retaliate as effectively.
+                var critTriggered = false
+
                 // Attacker Special Ability modifiers
                 when (attacker.activeAbilityId) {
                     "fireball" -> {
@@ -1065,24 +1106,41 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                         combatLog += "${attacker.name} channeled Soul Siphon! "
                     }
                     "critical_strike" -> {
-                        if (Random.nextDouble() <= 0.35) {
+                        if (Random.nextDouble() <= 0.30) { // 30%, matching the hero's stated ability
                             attDamage *= 2
                             attSpecial = true
-                            combatLog += "${attacker.name} triggered Critical Strike (2x Double Dmg)! "
+                            critTriggered = true
+                            combatLog += "${attacker.name} triggered Critical Strike (2x Dmg, no counter)! "
                         }
+                    }
+                    "dark_curse" -> {
+                        // "Reduces target's defense by 5 before striking" — translated into a real
+                        // effect: the weakened target can't counter as hard.
+                        defCounter = (defCounter - 5).coerceAtLeast(3)
+                        attSpecial = true
+                        combatLog += "${attacker.name} cast Abyssal Curse (target weakened, -5 counter dmg)! "
                     }
                     "reapers_guard" -> {
                         attSpecial = true
-                        combatLog += "${attacker.name} active: Reaper's Guard (+1 Match Def). "
+                        combatLog += "${attacker.name} active: Reaper's Guard (+1 permanent DEF). "
                     }
                 }
 
-                // Defender counter-shield modifiers
-                if (defender.activeAbilityId == "shield_bash") {
-                    defCounter = (defCounter * 1.5).toInt()
-                    attDamage = (attDamage * 0.6).toInt() // Reduces incoming by 40%
-                    defSpecial = true
-                    combatLog += "${defender.name} deflected with Shield Bash (Reduced incoming, boosted counter)!"
+                // A strike that hits well above baseline leaves less room for a counterattack.
+                // A confirmed critical hit is decisive enough to prevent any counter at all.
+                if (critTriggered) {
+                    defCounter = 0
+                } else {
+                    val damageAboveBaseline = (attDamage - 15).coerceAtLeast(0)
+                    defCounter = (defCounter - damageAboveBaseline / 3).coerceAtLeast(3)
+                }
+
+                // Attacker counter-shield modifiers — this hero blocks 40% of the counterattack
+                // damage it takes when IT is the one doing the capturing.
+                if (attacker.activeAbilityId == "shield_bash") {
+                    defCounter = (defCounter * 0.6).toInt().coerceAtLeast(2)
+                    attSpecial = true
+                    combatLog += "${attacker.name} braced with Shield Bash (-40% counter dmg)! "
                 }
             }
 
@@ -1132,11 +1190,16 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     attacker.id -> {
                         val becameKing = piece.isKing || (piece.isRed && toRow == 0) || (!piece.isRed && toRow == ruleSystem.boardSize - 1)
                         // Attacker moves to destination even if damaged (unless dead)
-                        var finalAtk = piece.atk
+                        // Reaper's Guard: "+1 permanent DEF per capture" — was previously boosting
+                        // ATK by 2 instead, which didn't match the hero's own description and had
+                        // no mechanical effect (attack power doesn't decide whether a capture
+                        // succeeds). +1 DEF compounds match-to-match, directly lowering the counter
+                        // damage this hero takes on every future capture (see defCounter formula).
+                        var finalDef = piece.def
                         if (defenderDied && attacker.activeAbilityId == "reapers_guard") {
-                            finalAtk += 2 // Boost attack for reaper
+                            finalDef += 1
                         }
-                        piece.copy(hp = nextAttackerHp, row = toRow, col = toCol, isKing = becameKing, atk = finalAtk)
+                        piece.copy(hp = nextAttackerHp, row = toRow, col = toCol, isKing = becameKing, def = finalDef)
                     }
                     defender.id -> {
                         piece.copy(hp = nextDefenderHp)
@@ -1391,19 +1454,29 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     private suspend fun updateUserLeaderboardMmr(newMmr: Int) {
-        val currentLeaderboard = leaderboard.value
+        val winRatio = if (newMmr > 1200) 52.5 else 50.0
+
+        // Local fallback record (used when signed out — see `leaderboard` combine above)
+        val currentLeaderboard = localLeaderboard.value
         val nextList = currentLeaderboard.map {
             if (it.isCurrentUser) {
-                val winRatio = if (newMmr > 1200) 52.5 else 50.0
                 it.copy(mmr = newMmr, winRate = winRatio)
             } else it
         }.sortedByDescending { it.mmr }
-
-        // Recalculate ranks
-        val reranked = nextList.mapIndexed { index, entry ->
-            entry.copy(rank = index + 1)
-        }
+        val reranked = nextList.mapIndexed { index, entry -> entry.copy(rank = index + 1) }
         repository.insertLeaderboard(reranked)
+
+        // Real global leaderboard — only meaningful once you're signed in with a stable identity.
+        if (isGoogleSignedIn) {
+            val state = playerState.value ?: return
+            val favorite = heroes.value.maxByOrNull { it.level }?.id ?: "knight"
+            LeaderboardRepository.submitScore(
+                name = state.playerName,
+                mmr = newMmr,
+                winRate = winRatio,
+                favoriteHero = favorite
+            )
+        }
     }
 
     // Cryptographic validation of ledger integrity in real-time
