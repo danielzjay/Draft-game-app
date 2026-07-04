@@ -15,6 +15,7 @@ import com.example.data.*
 import com.example.network.LeaderboardRepository
 import com.example.network.PaymentRepository
 import com.example.network.PaymentResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
 // Board piece data class used during gameplay
@@ -130,6 +132,13 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     // Gameplay States
     var isVsBot by mutableStateOf(true)
+    // `isVsBot` alone used to also mean "Online Matchmaking" (no real opponent exists there
+    // either — see startOnlineMatchmaking below), which meant NOTHING ever moved the opponent's
+    // pieces once it became their turn: the AI only ran `if (isVsBot)`, and online mode set
+    // isVsBot=false, so the "opponent" simply never took a turn — a real game-breaking freeze,
+    // not just a cosmetic issue. This flag is only true for genuine same-device 2-human play
+    // (Local Pass & Play), where the AI must NEVER take over the second player's turn.
+    var isRealHumanOpponent by mutableStateOf(false)
     var boardPieces by mutableStateOf<List<BoardPiece>>(emptyList())
     var selectedPiece by mutableStateOf<BoardPiece?>(null)
     var validMoves by mutableStateOf<List<Pair<Int, Int>>>(emptyList())
@@ -291,32 +300,41 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             SelectedGameMode.LOCAL_PASS_AND_PLAY -> {
                 isOnlineMode = false
                 isVsBot = false
+                isRealHumanOpponent = true
                 triggerNotification("Switched to Local Pass & Play Arena")
             }
             SelectedGameMode.OFFLINE_VS_BOT -> {
                 isOnlineMode = false
                 isVsBot = true
-                triggerNotification("Switched to Offline Campaign: VS Shadow Bot")
+                isRealHumanOpponent = false
+                rollNewBotPersona()
+                triggerNotification("Switched to Offline Campaign: VS ${currentBotPersona.name}")
             }
             SelectedGameMode.ONLINE_VS_BOT -> {
                 isOnlineMode = true
                 isVsBot = true
-                onlineOpponentName = "Cloud_Practice_Bot"
-                triggerNotification("Switched to Online VS Practice Bot")
+                isRealHumanOpponent = false
+                rollNewBotPersona()
+                triggerNotification("Switched to Online VS ${currentBotPersona.name}")
             }
             SelectedGameMode.ONLINE_MATCHMAKING -> {
                 isOnlineMode = true
                 isVsBot = false
+                isRealHumanOpponent = false
                 triggerNotification("Switched to Online Arena Matchmaking")
             }
             SelectedGameMode.COMPETITION_LEAGUE -> {
                 isOnlineMode = true
                 isVsBot = true
+                isRealHumanOpponent = false
+                rollNewBotPersona()
                 triggerNotification("Opened Vanguard League Competition Panel")
             }
             SelectedGameMode.COMPETITION_LADDER -> {
                 isOnlineMode = true
                 isVsBot = true
+                isRealHumanOpponent = false
+                rollNewBotPersona()
                 triggerNotification("Opened Gladiator Ladder Arena Brackets")
             }
         }
@@ -749,9 +767,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var isOnlineMode by mutableStateOf(false)
     var isSearchingOnlineMatch by mutableStateOf(false)
     var chatMessages by mutableStateOf<List<Pair<String, String>>>(emptyList())
-    var webRtcStatus by mutableStateOf("Idle") // Idle, Connecting, Established
-    var isMicMuted by mutableStateOf(false)
-    var isCameraEnabled by mutableStateOf(false)
+    var webRtcStatus by mutableStateOf("Idle") // Idle, FINDING_OPPONENT, MATCHED
     var showOnlineLobbyInviteDialog by mutableStateOf(false)
     var onlineOpponentName by mutableStateOf("Rival_Shadow_X")
     var activeOnlineCompetitionId by mutableStateOf<String?>(null)
@@ -1007,6 +1023,21 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     validMoves = emptyList()
                     validJumps = emptyList()
                     return
+                } else if (ruleSystem == DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION) {
+                    // FMJD "majority capture" rule: if ANY of your pieces can capture more pieces
+                    // in one sequence than this one can, you're not allowed to play this piece at
+                    // all — you must play whichever piece/sequence captures the most.
+                    val pieceMax = pieceMaxCaptures(piece)
+                    val globalMax = myColorPieces.maxOf { pieceMaxCaptures(it) }
+                    if (pieceMax < globalMax) {
+                        triggerNotification("Majority Capture Rule (FMJD): another piece can capture more — you must play that one.")
+                        validMoves = emptyList()
+                        validJumps = emptyList()
+                        return
+                    }
+                    validMoves = emptyList()
+                    validJumps = filterJumpsToMaximal(piece, rawJumps, pieceMax)
+                    return
                 } else {
                     // Restrict only to jump moves
                     validMoves = emptyList()
@@ -1018,6 +1049,110 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
         validMoves = rawMoves
         validJumps = rawJumps
+    }
+
+    // ---------------------------------------------------------------------------------
+    // FMJD "majority capture" rule support. Official international draughts rules say
+    // that if a player has more than one possible capturing sequence available (whether
+    // from the same piece taking a different branch, or from a different piece entirely),
+    // they must play a sequence that captures the MAXIMUM number of pieces. ACF and EDA
+    // have no such requirement — any legal capture satisfies "you must capture something."
+    //
+    // This needs a lightweight, side-effect-free simulation of jump sequences (can't reuse
+    // the real board/BoardPiece — those carry HP/combat stats that are irrelevant here and
+    // we don't want to mutate real game state while just counting hypothetical captures).
+    // ---------------------------------------------------------------------------------
+    private data class SimPiece(val row: Int, val col: Int, val isRed: Boolean, val isKing: Boolean)
+
+    private fun simFmjdJumps(piece: SimPiece, board: List<SimPiece>): List<Pair<Int, Int>> {
+        val jumps = mutableListOf<Pair<Int, Int>>()
+        val dirs = listOf(Pair(-1, -1), Pair(-1, 1), Pair(1, -1), Pair(1, 1))
+        val size = ruleSystem.boardSize
+        for (dir in dirs) {
+            if (piece.isKing) {
+                var step = 1
+                var capturedPos: Pair<Int, Int>? = null
+                while (true) {
+                    val r = piece.row + dir.first * step
+                    val c = piece.col + dir.second * step
+                    if (r !in 0 until size || c !in 0 until size) break
+                    val occupant = board.firstOrNull { it.row == r && it.col == c }
+                    if (occupant == null) {
+                        if (capturedPos != null) jumps.add(Pair(r, c))
+                    } else if (occupant.isRed == piece.isRed) {
+                        break
+                    } else {
+                        if (capturedPos != null) break // a second enemy piece with no gap blocks further flight
+                        capturedPos = Pair(r, c)
+                    }
+                    step++
+                }
+            } else {
+                val r1 = piece.row + dir.first
+                val c1 = piece.col + dir.second
+                val r2 = piece.row + dir.first * 2
+                val c2 = piece.col + dir.second * 2
+                if (r2 in 0 until size && c2 in 0 until size) {
+                    val mid = board.firstOrNull { it.row == r1 && it.col == c1 }
+                    val land = board.firstOrNull { it.row == r2 && it.col == c2 }
+                    if (mid != null && mid.isRed != piece.isRed && land == null) {
+                        jumps.add(Pair(r2, c2))
+                    }
+                }
+            }
+        }
+        return jumps
+    }
+
+    private fun simulateJumpResult(piece: SimPiece, toRow: Int, toCol: Int, board: List<SimPiece>): Pair<SimPiece, List<SimPiece>> {
+        val rowStep = if (toRow > piece.row) 1 else -1
+        val colStep = if (toCol > piece.col) 1 else -1
+        var r = piece.row + rowStep
+        var c = piece.col + colStep
+        var capRow = -1
+        var capCol = -1
+        while (r != toRow) {
+            val occ = board.firstOrNull { it.row == r && it.col == c }
+            if (occ != null) {
+                capRow = r
+                capCol = c
+            }
+            r += rowStep
+            c += colStep
+        }
+        // FMJD-specific: a piece that promotes mid-capture keeps flying as a king for the rest
+        // of THIS same sequence (unlike ACF/EDA, already handled separately in executeCombat).
+        val becomesKing = piece.isKing || (piece.isRed && toRow == 0) || (!piece.isRed && toRow == ruleSystem.boardSize - 1)
+        val movedPiece = piece.copy(row = toRow, col = toCol, isKing = becomesKing)
+        val newBoard = board.filterNot { (it.row == capRow && it.col == capCol) || (it.row == piece.row && it.col == piece.col) } + movedPiece
+        return Pair(movedPiece, newBoard)
+    }
+
+    /** Max total pieces this exact piece could capture in one turn, starting from its current spot. */
+    private fun maxCaptureFrom(piece: SimPiece, board: List<SimPiece>): Int {
+        val jumps = simFmjdJumps(piece, board)
+        if (jumps.isEmpty()) return 0
+        var best = 0
+        for ((toRow, toCol) in jumps) {
+            val (movedPiece, newBoard) = simulateJumpResult(piece, toRow, toCol, board)
+            best = maxOf(best, 1 + maxCaptureFrom(movedPiece, newBoard))
+        }
+        return best
+    }
+
+    private fun pieceMaxCaptures(piece: BoardPiece): Int {
+        val simBoard = boardPieces.map { SimPiece(it.row, it.col, it.isRed, it.isKing) }
+        return maxCaptureFrom(SimPiece(piece.row, piece.col, piece.isRed, piece.isKing), simBoard)
+    }
+
+    /** Keeps only the candidate jumps that lie on SOME sequence achieving `requiredTotal` captures. */
+    private fun filterJumpsToMaximal(piece: BoardPiece, candidates: List<Pair<Int, Int>>, requiredTotal: Int): List<Pair<Int, Int>> {
+        val simBoard = boardPieces.map { SimPiece(it.row, it.col, it.isRed, it.isKing) }
+        val simSelf = SimPiece(piece.row, piece.col, piece.isRed, piece.isKing)
+        return candidates.filter { (toRow, toCol) ->
+            val (movedPiece, newBoard) = simulateJumpResult(simSelf, toRow, toCol, simBoard)
+            1 + maxCaptureFrom(movedPiece, newBoard) == requiredTotal
+        }
     }
 
     private fun isValidGridPos(r: Int, c: Int) = r in 0 until ruleSystem.boardSize && c in 0 until ruleSystem.boardSize
@@ -1263,7 +1398,14 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             val haltsChain = justPromoted && stopsOnPromotion
 
             if (!attackerDied && updatedAttacker != null && !haltsChain) {
-                val (_, continuedJumps) = getMovesAndJumpsForPieceRaw(updatedAttacker)
+                val (_, rawContinuedJumps) = getMovesAndJumpsForPieceRaw(updatedAttacker)
+                // Majority capture rule applies at every step of the chain, not just the first
+                // jump — a piece already mid-sequence still can't dodge into a shorter branch.
+                val continuedJumps = if (rawContinuedJumps.isNotEmpty() && ruleSystem == DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION) {
+                    filterJumpsToMaximal(updatedAttacker, rawContinuedJumps, pieceMaxCaptures(updatedAttacker))
+                } else {
+                    rawContinuedJumps
+                }
                 if (continuedJumps.isNotEmpty()) {
                     selectedPiece = updatedAttacker
                     mustContinueJumpPieceId = updatedAttacker.id
@@ -1271,7 +1413,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     validJumps = continuedJumps
                     triggerNotification("Chain capture! ${updatedAttacker.name} must jump again.")
 
-                    if (isVsBot && !updatedAttacker.isRed) {
+                    if (!isRealHumanOpponent && !updatedAttacker.isRed) {
                         delay(700)
                         val nextJump = continuedJumps.random()
                         moveSelectedPiece(nextJump.first, nextJump.second)
@@ -1299,12 +1441,18 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             winnerMessage = "SHADOW CLAN VICTORIOUS!"
             SoundManager.playSfx(SoundManager.Sfx.DEFEAT)
             checkAndApplyTournamentMatchEnd()
+            if (!isRealHumanOpponent) {
+                viewModelScope.launch { LeaderboardRepository.reportBotMatchResult(currentBotPersona.name, currentBotPersona.baseMmr, botWon = true) }
+            }
             return
         }
         if (!blackRemaining) {
             winnerMessage = "VANGUARD ORDER VICTORIOUS!"
             SoundManager.playSfx(SoundManager.Sfx.VICTORY_FANFARE)
             checkAndApplyTournamentMatchEnd()
+            if (!isRealHumanOpponent) {
+                viewModelScope.launch { LeaderboardRepository.reportBotMatchResult(currentBotPersona.name, currentBotPersona.baseMmr, botWon = false) }
+            }
             // Reward match victory bonus
             viewModelScope.launch {
                 awardRewards(xpGained = 150, coinsGained = 75, isVictory = true)
@@ -1315,60 +1463,263 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         turnRed = !turnRed
 
         // Run AI bot logic if bot's turn and vs bot is active
-        if (isVsBot && !turnRed) {
+        if (!isRealHumanOpponent && !turnRed) {
             triggerBotTurn()
         }
     }
 
-    // Bot AI Decision Engine: checks jumps first, then executes standard moves
+    // ---------------------------------------------------------------------------------
+    // BOT AI ENGINE — real lookahead instead of picking a random legal move.
+    //
+    // Previously the bot just called `jumpsMap.random()` / `movesMap.random()` — it never
+    // considered whether a move was good, only whether it was legal. That made it trivial to
+    // beat and meant "Hard" mode played identically to "Easy." This replaces that with minimax
+    // + alpha-beta pruning over a lightweight simulated board (reusing the SimPiece model built
+    // for the FMJD majority-capture rule), with search depth and an intentional "mistake chance"
+    // tuned per difficulty so Easy genuinely plays like a beginner and Hard genuinely fights back.
+    // ---------------------------------------------------------------------------------
+    enum class BotDifficulty(val searchDepth: Int, val mistakeChance: Double) {
+        EASY(1, 0.40),
+        MEDIUM(3, 0.15),
+        HARD(4, 0.03)
+    }
+
+    data class BotPersona(val name: String, val difficulty: BotDifficulty, val baseMmr: Int)
+
+    // A pool of distinct opponents so players don't always face "the bot" — a fresh, randomly
+    // picked persona (name + difficulty) is assigned at the start of every bot match, offline
+    // or online, and that persona's own result gets reflected on the real leaderboard (see
+    // LeaderboardRepository — clearly tagged as CPU, never pretending to be a human).
+    val botPersonaPool = listOf(
+        BotPersona("Rookie_Kato", BotDifficulty.EASY, 900),
+        BotPersona("Cadet_Amara", BotDifficulty.EASY, 940),
+        BotPersona("Trainee_Believe", BotDifficulty.EASY, 920),
+        BotPersona("Striker_Zola", BotDifficulty.MEDIUM, 1250),
+        BotPersona("Tactician_Femi", BotDifficulty.MEDIUM, 1300),
+        BotPersona("Warden_Nia", BotDifficulty.MEDIUM, 1280),
+        BotPersona("GrandmasterX", BotDifficulty.HARD, 1800),
+        BotPersona("Vanguard_Legend", BotDifficulty.HARD, 1850),
+        BotPersona("ShadowClan_Elder", BotDifficulty.HARD, 1820)
+    )
+    var currentBotPersona by mutableStateOf(botPersonaPool.first { it.difficulty == BotDifficulty.MEDIUM })
+
+    fun rollNewBotPersona() {
+        currentBotPersona = botPersonaPool.random()
+        onlineOpponentName = currentBotPersona.name
+    }
+
+    /** Same movement rules as getMovesAndJumpsForPieceRaw, generalized to run on a SimPiece board. */
+    private fun simMovesAndJumps(piece: SimPiece, board: List<SimPiece>): Pair<List<Pair<Int, Int>>, List<Pair<Int, Int>>> {
+        val dirs = listOf(Pair(-1, -1), Pair(-1, 1), Pair(1, -1), Pair(1, 1))
+        val size = ruleSystem.boardSize
+        val moves = mutableListOf<Pair<Int, Int>>()
+        val jumps = mutableListOf<Pair<Int, Int>>()
+        val flying = ruleFlyingKings && piece.isKing
+
+        if (flying) {
+            for (dir in dirs) {
+                var step = 1
+                var capturedPos: Pair<Int, Int>? = null
+                while (true) {
+                    val r = piece.row + dir.first * step
+                    val c = piece.col + dir.second * step
+                    if (r !in 0 until size || c !in 0 until size) break
+                    val occ = board.firstOrNull { it.row == r && it.col == c }
+                    if (occ == null) {
+                        if (capturedPos != null) jumps.add(Pair(r, c)) else moves.add(Pair(r, c))
+                    } else if (occ.isRed == piece.isRed) {
+                        break
+                    } else {
+                        if (capturedPos != null) break
+                        capturedPos = Pair(r, c)
+                    }
+                    step++
+                }
+            }
+        } else {
+            val moveDirs = if (piece.isKing) dirs else if (piece.isRed) listOf(Pair(-1, -1), Pair(-1, 1)) else listOf(Pair(1, -1), Pair(1, 1))
+            for (dir in moveDirs) {
+                val r = piece.row + dir.first
+                val c = piece.col + dir.second
+                if (r in 0 until size && c in 0 until size && board.none { it.row == r && it.col == c }) moves.add(Pair(r, c))
+            }
+            for (dir in dirs) { // capture allowed in any direction for men AND non-flying kings
+                val r1 = piece.row + dir.first
+                val c1 = piece.col + dir.second
+                val r2 = piece.row + dir.first * 2
+                val c2 = piece.col + dir.second * 2
+                if (r2 in 0 until size && c2 in 0 until size) {
+                    val mid = board.firstOrNull { it.row == r1 && it.col == c1 }
+                    val land = board.firstOrNull { it.row == r2 && it.col == c2 }
+                    if (mid != null && mid.isRed != piece.isRed && land == null) jumps.add(Pair(r2, c2))
+                }
+            }
+        }
+        return Pair(moves, jumps)
+    }
+
+    private fun simApplyMove(piece: SimPiece, toRow: Int, toCol: Int, board: List<SimPiece>, isJump: Boolean): Pair<SimPiece, List<SimPiece>> {
+        val becomesKing = piece.isKing || (piece.isRed && toRow == 0) || (!piece.isRed && toRow == ruleSystem.boardSize - 1)
+        val movedPiece = piece.copy(row = toRow, col = toCol, isKing = becomesKing)
+        var newBoard = board.filterNot { it.row == piece.row && it.col == piece.col }
+        if (isJump) {
+            val rowStep = if (toRow > piece.row) 1 else -1
+            val colStep = if (toCol > piece.col) 1 else -1
+            var r = piece.row + rowStep
+            var c = piece.col + colStep
+            var capRow = -1
+            var capCol = -1
+            while (r != toRow) {
+                if (newBoard.any { it.row == r && it.col == c }) {
+                    capRow = r
+                    capCol = c
+                }
+                r += rowStep
+                c += colStep
+            }
+            newBoard = newBoard.filterNot { it.row == capRow && it.col == capCol }
+        }
+        newBoard = newBoard + movedPiece
+        return Pair(movedPiece, newBoard)
+    }
+
+    /** Resolves an entire turn including any mandatory follow-up jumps, same as real gameplay. */
+    private fun resolveFullTurn(piece: SimPiece, toRow: Int, toCol: Int, board: List<SimPiece>, isJump: Boolean): List<SimPiece> {
+        var (current, currentBoard) = simApplyMove(piece, toRow, toCol, board, isJump)
+        if (!isJump) return currentBoard
+        val justPromoted = !piece.isKing && current.isKing
+        val stopsOnPromotion = ruleSystem != DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION
+        if (justPromoted && stopsOnPromotion) return currentBoard
+        while (true) {
+            val (_, moreJumps) = simMovesAndJumps(current, currentBoard)
+            if (moreJumps.isEmpty()) break
+            // Search-time simplification: continue via the first available further jump rather
+            // than re-running majority-capture analysis mid-search. Majority-capture is still
+            // fully enforced for the bot's actual chosen move at the root (see pickBotMove) —
+            // this only affects the AI's internal lookahead approximation, not real rule legality.
+            val (r, c) = moreJumps.first()
+            val (next, nextBoard) = simApplyMove(current, r, c, currentBoard, true)
+            current = next
+            currentBoard = nextBoard
+        }
+        return currentBoard
+    }
+
+    private fun evaluateBoard(board: List<SimPiece>, forRed: Boolean): Double {
+        var score = 0.0
+        for (p in board) {
+            val pieceValue = if (p.isKing) 3.0 else 1.0
+            val advancement = if (p.isRed) (ruleSystem.boardSize - 1 - p.row) else p.row
+            val v = pieceValue + advancement * 0.02
+            score += if (p.isRed == forRed) v else -v
+        }
+        return score
+    }
+
+    private fun minimax(board: List<SimPiece>, depth: Int, isRedTurn: Boolean, forRed: Boolean, alphaIn: Double, betaIn: Double): Double {
+        var alpha = alphaIn
+        var beta = betaIn
+        val pieces = board.filter { it.isRed == isRedTurn }
+        if (pieces.isEmpty()) return if (isRedTurn == forRed) -1000.0 else 1000.0
+        if (depth == 0) return evaluateBoard(board, forRed)
+
+        val jumpCandidates = mutableListOf<Triple<SimPiece, Int, Int>>()
+        val moveCandidates = mutableListOf<Triple<SimPiece, Int, Int>>()
+        for (p in pieces) {
+            val (mv, jp) = simMovesAndJumps(p, board)
+            mv.forEach { moveCandidates.add(Triple(p, it.first, it.second)) }
+            jp.forEach { jumpCandidates.add(Triple(p, it.first, it.second)) }
+        }
+        val candidates = if (jumpCandidates.isNotEmpty()) jumpCandidates else moveCandidates
+        if (candidates.isEmpty()) return if (isRedTurn == forRed) -1000.0 else 1000.0
+
+        val maximizing = isRedTurn == forRed
+        var best = if (maximizing) Double.NEGATIVE_INFINITY else Double.POSITIVE_INFINITY
+        for ((piece, toR, toC) in candidates) {
+            val resultBoard = resolveFullTurn(piece, toR, toC, board, jumpCandidates.isNotEmpty())
+            val score = minimax(resultBoard, depth - 1, !isRedTurn, forRed, alpha, beta)
+            if (maximizing) {
+                if (score > best) best = score
+                if (best > alpha) alpha = best
+            } else {
+                if (score < best) best = score
+                if (best < beta) beta = best
+            }
+            if (alpha >= beta) break
+        }
+        return best
+    }
+
+    /** Picks the bot's move for this turn: real search, majority-capture-legal, with a tuned chance of an intentional mistake so lower difficulties genuinely feel weaker. */
+    private suspend fun pickBotMove(): Triple<BoardPiece, Int, Int>? = withContext(Dispatchers.Default) {
+        val difficulty = currentBotPersona.difficulty
+        val botPieces = boardPieces.filter { !it.isRed }
+        if (botPieces.isEmpty()) return@withContext null
+
+        val allJumps = mutableListOf<Triple<BoardPiece, Int, Int>>()
+        val allMoves = mutableListOf<Triple<BoardPiece, Int, Int>>()
+        for (p in botPieces) {
+            val (rawMoves, rawJumps) = getMovesAndJumpsForPieceRaw(p)
+            rawMoves.forEach { allMoves.add(Triple(p, it.first, it.second)) }
+            rawJumps.forEach { allJumps.add(Triple(p, it.first, it.second)) }
+        }
+
+        // Majority capture rule applies to the bot exactly as it does to a human, in FMJD mode.
+        val candidateJumps = if (allJumps.isNotEmpty() && ruleSystem == DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION) {
+            val globalMax = botPieces.maxOf { pieceMaxCaptures(it) }
+            allJumps.filter { (p, r, c) -> filterJumpsToMaximal(p, listOf(Pair(r, c)), pieceMaxCaptures(p)).isNotEmpty() && pieceMaxCaptures(p) == globalMax }
+        } else {
+            allJumps
+        }
+
+        val candidates = if (candidateJumps.isNotEmpty()) candidateJumps else allMoves
+        if (candidates.isEmpty()) return@withContext null
+
+        if (Random.nextDouble() < difficulty.mistakeChance) {
+            return@withContext candidates.random()
+        }
+
+        val simBoard = boardPieces.map { SimPiece(it.row, it.col, it.isRed, it.isKing) }
+        val isJump = candidateJumps.isNotEmpty()
+        var bestScore = Double.NEGATIVE_INFINITY
+        val bestMoves = mutableListOf<Triple<BoardPiece, Int, Int>>()
+        for ((piece, toR, toC) in candidates) {
+            val simPiece = SimPiece(piece.row, piece.col, piece.isRed, piece.isKing)
+            val resultBoard = resolveFullTurn(simPiece, toR, toC, simBoard, isJump)
+            val score = minimax(resultBoard, (difficulty.searchDepth - 1).coerceAtLeast(0), true, false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)
+            when {
+                score > bestScore -> {
+                    bestScore = score
+                    bestMoves.clear()
+                    bestMoves.add(Triple(piece, toR, toC))
+                }
+                score == bestScore -> bestMoves.add(Triple(piece, toR, toC))
+            }
+        }
+        bestMoves.randomOrNull() ?: candidates.random()
+    }
+
+    // Bot AI Decision Engine: real search-based move selection (see pickBotMove above)
     private fun triggerBotTurn() {
         if (winnerMessage != null) return
         isBotThinking = true
 
         viewModelScope.launch {
-            delay(1200) // Simulate cognitive delay
+            delay(600) // Brief pause so a HARD bot's real computation doesn't feel instant/robotic
+            val choice = pickBotMove()
+            isBotThinking = false
 
-            val botPieces = boardPieces.filter { !it.isRed }
-            if (botPieces.isEmpty()) {
-                isBotThinking = false
-                endTurn()
-                return@launch
-            }
-
-            // 1. Gather all potential moves/jumps for each bot piece using the active official rule system
-            val jumpsMap = mutableListOf<Triple<BoardPiece, Int, Int>>() // Attacker, ToRow, ToCol
-            val movesMap = mutableListOf<Triple<BoardPiece, Int, Int>>()
-
-            for (p in botPieces) {
-                val (rawMoves, rawJumps) = getMovesAndJumpsForPieceRaw(p)
-                for (mv in rawMoves) {
-                    movesMap.add(Triple(p, mv.first, mv.second))
-                }
-                for (jp in rawJumps) {
-                    jumpsMap.add(Triple(p, jp.first, jp.second))
-                }
-            }
-
-            // 2. Execute optimal choice
-            if (jumpsMap.isNotEmpty()) {
-                // Prioritize battle! Pick a random jump capture
-                val selectedJump = jumpsMap.random()
-                selectedPiece = selectedJump.first
-                isBotThinking = false
-                moveSelectedPiece(selectedJump.second, selectedJump.third)
-            } else if (movesMap.isNotEmpty()) {
-                // Perform simple safe move
-                val selectedMove = movesMap.random()
-                selectedPiece = selectedMove.first
-                isBotThinking = false
-                moveSelectedPiece(selectedMove.second, selectedMove.third)
-            } else {
+            if (choice == null) {
                 // No available moves, bot surrenders/passes
-                isBotThinking = false
                 winnerMessage = "VANGUARD ORDER VICTORIOUS! (Shadow trapped)"
                 SoundManager.playSfx(SoundManager.Sfx.VICTORY_FANFARE)
                 checkAndApplyTournamentMatchEnd()
+                return@launch
             }
+
+            val (piece, toRow, toCol) = choice
+            selectedPiece = piece
+            moveSelectedPiece(toRow, toCol)
         }
     }
 
@@ -1693,33 +2044,37 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
-    // Online multiplayer lobby matchmaking & WebRTC simulator
+    // "Online Arena Matchmaking" — IMPORTANT: there is no real opponent here. No networking,
+    // matchmaking server, or WebRTC connection actually exists anywhere in this codebase — the
+    // previous version of this function faked a WebRTC handshake (ICE candidates, SDP offers)
+    // and claimed "Voice & Video channels available," none of which was ever implemented. That's
+    // the kind of claim that gets an app pulled for deceptive behavior if anyone checks, and more
+    // importantly it's just not true. This still matches you with an AI opponent (see the
+    // isRealHumanOpponent fix above, which is what makes it actually playable rather than
+    // freezing), but the UI now says so honestly instead of pretending it's a live human via P2P.
     fun startOnlineMatchmaking() {
         if (isSearchingOnlineMatch || isOnlineMode) return
         isSearchingOnlineMatch = true
         webRtcStatus = "Idle"
         viewModelScope.launch {
-            delay(1500)
-            webRtcStatus = "GATHERING_ICE_CANDIDATES"
-            delay(1000)
-            webRtcStatus = "EXCHANGING_SDP_OFFER"
-            delay(1000)
-            webRtcStatus = "ESTABLISHING_PEER_CONNECTION"
-            delay(1000)
-            webRtcStatus = "STABLE"
-            
+            delay(1200)
+            webRtcStatus = "FINDING_OPPONENT"
+            delay(1200)
+            webRtcStatus = "MATCHED"
+
             isSearchingOnlineMatch = false
             isOnlineMode = true
             isVsBot = false
-            onlineOpponentName = listOf("DraughtsLord_99", "CheckersPro_East", "GrandmasterX", "Vanguard_Legend").random()
+            isRealHumanOpponent = false
+            rollNewBotPersona()
             activeOnlineCompetitionId = "COMP-" + Random.nextInt(1000, 9999)
-            
+
             chatMessages = listOf(
-                Pair("System", "Secure WebRTC Peer Connection Established! Voice & Video channels available."),
-                Pair(onlineOpponentName, "Good luck, have fun! Let the best combat strategist win! ⚔️")
+                Pair("System", "Matched with an AI arena rival (real cross-device multiplayer isn't built yet)."),
+                Pair(onlineOpponentName, "Good luck, have fun! Let's see your strategy! ⚔️")
             )
-            
-            triggerNotification("Matched online opponent: $onlineOpponentName! WebRTC active.")
+
+            triggerNotification("Matched with AI arena rival: $onlineOpponentName")
             resetGame()
         }
     }
@@ -1727,8 +2082,9 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     fun sendChatMessage(text: String) {
         if (text.isBlank()) return
         chatMessages = chatMessages + Pair("You", text)
-        
-        // Dynamic simulated reply from online rival
+
+        // These are canned lines from the AI opponent, not a real person — labelled as such
+        // above when the match starts, so this isn't pretending to be human conversation.
         viewModelScope.launch {
             delay(2000)
             val replies = listOf(
@@ -1746,6 +2102,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     fun endOnlineMatch() {
         isOnlineMode = false
         isVsBot = true
+        isRealHumanOpponent = false
         activeOnlineCompetitionId = null
         webRtcStatus = "Idle"
         triggerNotification("Online match ended. Returned to local practice arena.")

@@ -4,19 +4,41 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /leaderboard/{uid} {
+    match /leaderboard/{docId} {
       // Anyone (signed in or not) can READ the leaderboard.
       allow read: if true;
 
-      // Only the signed-in owner of a doc can write THEIR OWN entry (doc ID == their uid).
-      // Nobody can write to another player's entry.
+      // A real player can only write THEIR OWN entry (doc ID == their uid).
       allow create, update: if request.auth != null
-        && request.auth.uid == uid
+        && request.auth.uid == docId
         && request.resource.data.mmr is int
         && request.resource.data.mmr >= 0
         && request.resource.data.mmr <= 5000 // sanity ceiling — adjust to your real max MMR
         && request.resource.data.name is string
-        && request.resource.data.name.size() <= 40;
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.isBot == false;
+
+      // Bot persona entries (doc IDs like "bot_grandmasterx") — any signed-in player can update
+      // a bot's score after playing it, but only by a small bounded amount per write, since bots
+      // have no real Firebase Auth account of their own to restrict writes to. This is a
+      // reasonable bound for a cosmetic/flavor leaderboard entry, not real security — a
+      // determined client could still spam small legal writes. Don't treat bot rankings as
+      // trustworthy competitive data.
+      allow create: if request.auth != null
+        && docId.matches('bot_.*')
+        && request.resource.data.isBot == true
+        && request.resource.data.mmr is int
+        && request.resource.data.mmr >= 0
+        && request.resource.data.mmr <= 5000;
+
+      allow update: if request.auth != null
+        && docId.matches('bot_.*')
+        && request.resource.data.isBot == true
+        && request.resource.data.mmr is int
+        && request.resource.data.mmr >= 0
+        && request.resource.data.mmr <= 5000
+        && (request.resource.data.mmr - resource.data.mmr) >= -20
+        && (request.resource.data.mmr - resource.data.mmr) <= 20;
 
       allow delete: if false;
     }

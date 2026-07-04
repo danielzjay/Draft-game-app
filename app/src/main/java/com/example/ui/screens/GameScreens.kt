@@ -437,7 +437,7 @@ fun BattleScreen(viewModel: GameViewModel) {
                         GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "Play with a friend locally on the same device. No account link required."
                         GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "Battle the local dark core bot offline for casual training."
                         GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "Practice online with high performance AI bot hosted in cloud containers."
-                        GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "Match with random online warriors peer-to-peer via secure channels."
+                        GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "Matches you with an AI arena rival (real cross-device multiplayer isn't built yet)."
                         GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "Football-style league tables. First register, then play according to the fixture schedule."
                         GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "Bottom-Up progression ladder. Defeat opponents in order to reach Rank 1."
                     },
@@ -1026,160 +1026,28 @@ fun BattleScreen(viewModel: GameViewModel) {
         if (viewModel.isOnlineMode) {
             Spacer(modifier = Modifier.height(16.dp))
             
-            // WebRTC Video & Voice Call Panel
+            // Honest disclosure: this is an AI opponent dressed up as an "online rival," not a
+            // real networked match — there is no real-time video/voice calling here (there
+            // never was a working implementation behind it, despite what the UI used to claim).
             Card(
                 colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = BorderStroke(1.dp, Color(0x3300E676)),
+                border = BorderStroke(1.dp, Color(0x33FFC107)),
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Videocam,
-                                contentDescription = "WebRTC",
-                                tint = Color(0xFF00E676),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "WebRTC Live Voice & Video",
-                                color = TextWhite,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        
-                        // Status tag
-                        Box(
-                            modifier = Modifier
-                                .background(Color(0x3300E676), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
-                            Text(
-                                text = "STABLE CONNECTION",
-                                color = Color(0xFF00E676),
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(10.dp))
-                    
-                    // Voice and video grids (Simulated avatar circles or cameras!)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        // User Stream Camera Frame
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.Black)
-                                    .border(1.dp, if (viewModel.isCameraEnabled) Color(0xFF00E676) else Color.DarkGray, RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                if (viewModel.isCameraEnabled) {
-                                    // Simulated Webcam Feed (Moving particles/glow)
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(Color(0xFF1B5E20)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("LIVE Cam", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                } else {
-                                    Icon(Icons.Default.VideocamOff, contentDescription = "Off", tint = Color.Gray, modifier = Modifier.size(24.dp))
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("You (Daniel)", color = TextGray, fontSize = 10.sp)
-                        }
-                        
-                        // Opponent Stream Camera Frame
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.Black)
-                                    .border(1.dp, Color(0xFF00E676), RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                // Rival always has webcam active
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0xFF311B92)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("RIVAL Feed", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(viewModel.onlineOpponentName, color = TextGray, fontSize = 10.sp)
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(10.dp))
-                    
-                    // Streaming controls
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        IconButton(
-                            onClick = { viewModel.isMicMuted = !viewModel.isMicMuted },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(if (viewModel.isMicMuted) Color.DarkGray else Color(0x22FFFFFF), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = if (viewModel.isMicMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                                contentDescription = "Mute",
-                                tint = if (viewModel.isMicMuted) RedCrimson else Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        
-                        IconButton(
-                            onClick = { viewModel.isCameraEnabled = !viewModel.isCameraEnabled },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(if (!viewModel.isCameraEnabled) Color.DarkGray else Color(0x22FFFFFF), CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = if (viewModel.isCameraEnabled) Icons.Default.Videocam else Icons.Default.VideocamOff,
-                                contentDescription = "Camera",
-                                tint = if (viewModel.isCameraEnabled) Color(0xFF00E676) else Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        
-                        IconButton(
-                            onClick = { viewModel.endOnlineMatch() },
-                            modifier = Modifier
-                                .size(34.dp)
-                                .background(RedCrimson, CircleShape)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CallEnd,
-                                contentDescription = "Disconnect Match",
-                                tint = Color.White,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.SmartToy, contentDescription = null, tint = AmberGold, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "Playing an AI arena rival — real cross-device multiplayer isn't built yet.",
+                        color = TextGray,
+                        fontSize = 10.sp
+                    )
                 }
             }
+
 
             // Real-time Chat Console Composable
             Card(
@@ -2021,6 +1889,16 @@ fun LeaderboardScreen(viewModel: GameViewModel) {
                                             Text("YOU", color = DarkBg, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
+                                    if (entry.isBot) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Box(
+                                            modifier = Modifier
+                                                .background(Color(0xFF5E35B1), RoundedCornerShape(4.dp))
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                        ) {
+                                            Text("CPU", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
                                 }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text("FAV HERO: ", color = TextMuted, fontSize = 9.sp)
@@ -2387,6 +2265,8 @@ fun SyncScreen(viewModel: GameViewModel) {
                                     " • Kings are FLYING KINGS (can slide diagonally any distance).\n" +
                                     " • A man promoted to King mid-capture keeps going in the SAME turn — it continues\n" +
                                     "   capturing as a flying king if more jumps are available (unlike ACF/EDA).\n" +
+                                    " • Majority Capture Rule: if you have a choice between capture sequences, you MUST\n" +
+                                    "   play whichever one captures the most pieces — shorter captures are blocked.\n" +
                                     " • Jumps are mandatory (Forced Jumps: ON)."
                             },
                             color = TextGray,
@@ -2514,17 +2394,17 @@ fun SyncScreen(viewModel: GameViewModel) {
                         CircularProgressIndicator(color = AmberGold, modifier = Modifier.size(28.dp))
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "WebRTC Signaling: " + viewModel.webRtcStatus,
+                            text = "Status: " + viewModel.webRtcStatus,
                             color = AmberGold,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
-                        Text("Connecting Peer-to-Peer with global checkmates...", color = TextGray, fontSize = 10.sp)
+                        Text("Finding an arena rival...", color = TextGray, fontSize = 10.sp)
                     }
                 } else {
                     Text(
-                        "Test your tactical hero skills against rival players on secure global matchmaking channels with voice calls enabled over WebRTC connection streams.",
+                        "Test your tactical hero skills against an AI arena rival — real cross-device multiplayer isn't built yet, so this matches you with AI, not another person.",
                         color = TextGray,
                         fontSize = 10.sp,
                         modifier = Modifier.padding(bottom = 10.dp)

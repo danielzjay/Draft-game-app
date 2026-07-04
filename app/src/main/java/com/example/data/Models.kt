@@ -57,7 +57,8 @@ data class LeaderboardEntry(
     val mmr: Int,
     val winRate: Double,
     val favoriteHero: String,
-    val isCurrentUser: Boolean = false
+    val isCurrentUser: Boolean = false,
+    val isBot: Boolean = false
 )
 
 data class LeagueMatch(
