@@ -24,42 +24,52 @@ import kotlinx.coroutines.tasks.await
  */
 object LeaderboardRepository {
 
-    private val db by lazy { FirebaseFirestore.getInstance() }
+    private val dbOrNull: FirebaseFirestore?
+        get() = try {
+            FirebaseFirestore.getInstance()
+        } catch (e: Exception) {
+            null
+        }
+
     private const val COLLECTION = "leaderboard"
 
     /** Live top-N entries, ordered by MMR descending. Updates in real time as anyone plays. */
-    fun observeTopEntries(limit: Long = 50): Flow<List<LeaderboardEntry>> = callbackFlow {
-        val registration = db.collection(COLLECTION)
-            .orderBy("mmr", Query.Direction.DESCENDING)
-            .limit(limit)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null || snapshot == null) {
-                    trySend(emptyList())
-                    return@addSnapshotListener
+    fun observeTopEntries(limit: Long = 50): Flow<List<LeaderboardEntry>> {
+        val firestore = dbOrNull ?: return kotlinx.coroutines.flow.flowOf(emptyList())
+        return callbackFlow {
+            val registration = firestore.collection(COLLECTION)
+                .orderBy("mmr", Query.Direction.DESCENDING)
+                .limit(limit)
+                .addSnapshotListener { snapshot, error ->
+                    if (error != null || snapshot == null) {
+                        trySend(emptyList())
+                        return@addSnapshotListener
+                    }
+                    val currentUid = try { FirebaseAuth.getInstance().currentUser?.uid } catch (e: Exception) { null }
+                    val entries = snapshot.documents.mapIndexedNotNull { index, doc ->
+                        val name = doc.getString("name") ?: return@mapIndexedNotNull null
+                        val mmr = doc.getLong("mmr")?.toInt() ?: return@mapIndexedNotNull null
+                        val winRate = doc.getDouble("winRate") ?: 0.0
+                        val favoriteHero = doc.getString("favoriteHero") ?: "knight"
+                        LeaderboardEntry(
+                            rank = index + 1,
+                            name = name,
+                            mmr = mmr,
+                            winRate = winRate,
+                            favoriteHero = favoriteHero,
+                            isCurrentUser = doc.id == currentUid
+                        )
+                    }
+                    trySend(entries)
                 }
-                val currentUid = FirebaseAuth.getInstance().currentUser?.uid
-                val entries = snapshot.documents.mapIndexedNotNull { index, doc ->
-                    val name = doc.getString("name") ?: return@mapIndexedNotNull null
-                    val mmr = doc.getLong("mmr")?.toInt() ?: return@mapIndexedNotNull null
-                    val winRate = doc.getDouble("winRate") ?: 0.0
-                    val favoriteHero = doc.getString("favoriteHero") ?: "knight"
-                    LeaderboardEntry(
-                        rank = index + 1,
-                        name = name,
-                        mmr = mmr,
-                        winRate = winRate,
-                        favoriteHero = favoriteHero,
-                        isCurrentUser = doc.id == currentUid
-                    )
-                }
-                trySend(entries)
-            }
-        awaitClose { registration.remove() }
+            awaitClose { registration.remove() }
+        }
     }
 
     /** Pushes the signed-in player's latest stats up so everyone else's leaderboard updates too. */
     suspend fun submitScore(name: String, mmr: Int, winRate: Double, favoriteHero: String): Result<Unit> {
-        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        val firestore = dbOrNull ?: return Result.failure(Exception("Firebase is not initialized."))
+        val uid = try { FirebaseAuth.getInstance().currentUser?.uid } catch (e: Exception) { null }
             ?: return Result.failure(Exception("Sign in with Google to appear on the global leaderboard."))
         return try {
             val data = mapOf(
@@ -69,7 +79,7 @@ object LeaderboardRepository {
                 "favoriteHero" to favoriteHero,
                 "updatedAt" to System.currentTimeMillis()
             )
-            db.collection(COLLECTION).document(uid).set(data).await()
+            firestore.collection(COLLECTION).document(uid).set(data).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

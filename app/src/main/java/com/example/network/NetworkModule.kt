@@ -32,11 +32,23 @@ object NetworkModule {
         .writeTimeout(15, TimeUnit.SECONDS)
         .build()
 
+    private val sanitizedBaseUrl: String
+        get() {
+            var url = BuildConfig.PAYMENT_BACKEND_BASE_URL.trim()
+            if (url.endsWith("relworx.php")) {
+                url = url.substringBeforeLast("relworx.php")
+            }
+            if (!url.endsWith("/")) {
+                url += "/"
+            }
+            return url
+        }
+
     // Points at YOUR backend proxy (see /server/relworxProxy.js), configured via .env ->
     // BuildConfig.PAYMENT_BACKEND_BASE_URL. Set the real value in your own .env file, which is
     // git-ignored — never commit it.
     private val retrofit: Retrofit = Retrofit.Builder()
-        .baseUrl(BuildConfig.PAYMENT_BACKEND_BASE_URL)
+        .baseUrl(sanitizedBaseUrl)
         .client(okHttpClient)
         .addConverterFactory(MoshiConverterFactory.create(moshi))
         .build()

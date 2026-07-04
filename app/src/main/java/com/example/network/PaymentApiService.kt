@@ -21,22 +21,22 @@ import retrofit2.http.Query
  */
 interface PaymentApiService {
 
-    @POST("mobile-money/validate")
+    @POST("relworx.php?action=validate")
     suspend fun validateMobileNumber(
         @Body request: ValidateMobileNumberRequest
     ): Response<ValidateMobileNumberResponse>
 
-    @POST("mobile-money/request-payment")
+    @POST("relworx.php?action=request-payment")
     suspend fun requestPayment(
         @Body request: RequestPaymentRequest
     ): Response<RelworxPaymentInitResponse>
 
-    @POST("mobile-money/send-payment")
+    @POST("relworx.php?action=send-payment")
     suspend fun sendPayment(
         @Body request: SendPaymentRequest
     ): Response<RelworxPaymentInitResponse>
 
-    @GET("mobile-money/check-request-status")
+    @GET("relworx.php?action=check-status")
     suspend fun checkRequestStatus(
         @Query("internal_reference") internalReference: String,
         @Query("account_no") accountNo: String

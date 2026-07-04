@@ -68,7 +68,9 @@ object GoogleAuthManager {
     }
 
     suspend fun signOut(context: Context) {
-        FirebaseAuth.getInstance().signOut()
+        try {
+            FirebaseAuth.getInstance().signOut()
+        } catch (_: Exception) {}
         try {
             val credentialManager = CredentialManager.create(context)
             credentialManager.clearCredentialState(ClearCredentialStateRequest())
@@ -78,7 +80,13 @@ object GoogleAuthManager {
     }
 
     /** Restores a previous session on app relaunch, since Firebase Auth persists sign-in state. */
-    fun currentUser(): FirebaseUser? = FirebaseAuth.getInstance().currentUser
+    fun currentUser(): FirebaseUser? {
+        return try {
+            FirebaseAuth.getInstance().currentUser
+        } catch (e: Exception) {
+            null
+        }
+    }
 
     private fun generateNonce(): String {
         val bytes = ByteArray(16)

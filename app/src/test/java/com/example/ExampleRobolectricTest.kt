@@ -1,6 +1,7 @@
 package com.example
 
 import android.content.Context
+import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -18,4 +19,19 @@ class ExampleRobolectricTest {
     val appName = context.getString(R.string.app_name)
     assertEquals("Draughts Combat", appName)
   }
+
+  @Test
+  fun `launch main activity to diagnose crashes`() {
+    try {
+      ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+        scenario.onActivity { activity ->
+          println("MainActivity launched successfully!")
+        }
+      }
+    } catch (e: Throwable) {
+      e.printStackTrace()
+      throw e
+    }
+  }
 }
+
