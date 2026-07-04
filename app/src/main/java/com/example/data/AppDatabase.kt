@@ -12,7 +12,7 @@ import java.security.MessageDigest
 
 @Database(
     entities = [Hero::class, PlayerState::class, BlockchainBlock::class, LeaderboardEntry::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -29,8 +29,12 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "draughts_combat_database"
                 )
-                .fallbackToDestructiveMigration()
                 .addCallback(AppDatabaseCallback(scope))
+                // No real users have this app installed yet, so a destructive fallback is safe —
+                // if you've already tested a build with the old schema, this just wipes local
+                // save data once when you install this version. Replace with a real Migration()
+                // once you have live users you can't afford to reset.
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

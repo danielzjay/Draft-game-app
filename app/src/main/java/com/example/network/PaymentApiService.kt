@@ -7,8 +7,8 @@ import retrofit2.http.POST
 import retrofit2.http.Query
 
 /**
- * These endpoints live on YOUR backend (see the Cloud Function proxy in
- * /server/relworxProxy.js), not on payments.relworx.com directly.
+ * These endpoints live on YOUR backend (see /server/relworx.php), not on payments.relworx.com
+ * directly.
  *
  * Why not call Relworx straight from the app?
  * Relworx auth is a single secret Bearer API key with NO per-user scoping. If that key is

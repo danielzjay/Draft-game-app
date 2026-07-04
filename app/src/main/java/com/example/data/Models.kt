@@ -35,7 +35,9 @@ data class PlayerState(
     val selectedBoardStyle: String = "classic", // "classic", "royal", "neon_grid"
     val unlockedSkins: String = "classic", // Comma-separated
     val lastSyncedTime: Long = 0L,
-    val syncAccount: String = ""
+    val syncAccount: String = "",
+    val customMusicUri: String? = null, // content:// URI of a user-picked song, if any
+    val customMusicName: String? = null
 )
 
 @Entity(tableName = "blockchain_ledger")

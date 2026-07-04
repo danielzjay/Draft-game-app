@@ -1,6 +1,11 @@
 /**
  * Firebase Cloud Function proxy for the Relworx Payments API.
  *
+ * NOTE: the app's PaymentApiService.kt currently calls a PHP backend (see /server/relworx.php)
+ * instead of this file — this Cloud Function is left here as an alternative if you'd rather
+ * host on Firebase than on PHP/shared hosting. Only one of the two should actually be wired up;
+ * whichever you use, PAYMENT_BACKEND_BASE_URL in your .env must point at it.
+ *
  * WHY THIS EXISTS:
  * Relworx auth is one secret Bearer API key for your whole merchant account — it is NOT safe
  * to put inside an Android app, because anyone can decompile the APK and extract it, then use

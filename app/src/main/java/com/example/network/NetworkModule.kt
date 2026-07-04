@@ -44,9 +44,9 @@ object NetworkModule {
             return url
         }
 
-    // Points at YOUR backend proxy (see /server/relworxProxy.js), configured via .env ->
-    // BuildConfig.PAYMENT_BACKEND_BASE_URL. Set the real value in your own .env file, which is
-    // git-ignored — never commit it.
+    // Points at YOUR backend proxy (see /server/relworx.php, or /server/relworxProxy.js if you
+    // chose the Firebase alternative instead), configured via .env -> BuildConfig.PAYMENT_BACKEND_BASE_URL.
+    // Set the real value in your own .env file, which is git-ignored — never commit it.
     private val retrofit: Retrofit = Retrofit.Builder()
         .baseUrl(sanitizedBaseUrl)
         .client(okHttpClient)

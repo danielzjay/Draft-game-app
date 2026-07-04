@@ -8,6 +8,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.R
+import com.example.audio.SoundManager
 import com.example.auth.GoogleAuthManager
 import com.example.data.*
 import com.example.network.LeaderboardRepository
@@ -257,6 +259,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     )
                     paymentStatusMessage = "Payment confirmed! +$paymentPortalPackageCoins BLC credited."
                     triggerNotification("Payment successful via ${outcome.status.provider ?: "Mobile Money"}!")
+                    SoundManager.playSfx(SoundManager.Sfx.PURCHASE)
                     isPaymentPortalOpen = false
                 }
                 is PaymentResult.Failed -> {
@@ -577,6 +580,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             }
             grantCoinsToState(rewardCoins)
             triggerNotification("🏆 VICTORY! Cleared ${currentTier.title}! Earned $rewardCoins BLC!")
+            SoundManager.playSfx(SoundManager.Sfx.MATCH_COMPLETE)
             
             // Advance tier or claim victory trophy
             ladderRoundsState = ladderRoundsState.mapIndexed { i, tier ->
@@ -669,14 +673,25 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     // --- MUSIC & SOUND PREFERENCES ---
     var musicVolume by mutableStateOf(0.7f)
+        set(value) {
+            field = value
+            SoundManager.musicVolume = value
+        }
     var soundVolume by mutableStateOf(0.8f)
-    var selectedMusicTrack by mutableStateOf("Vanguard Anthem (Orchestral)")
-    val musicTracks = listOf(
-        "Vanguard Anthem (Orchestral)",
-        "Shadow Keep (Synth)",
-        "Gladiator Pit (Epic Percussion)",
-        "Quiet Arena (Lofi)"
+        set(value) {
+            field = value
+            SoundManager.sfxVolume = value
+        }
+
+    // Bundled tracks. resId is what actually gets played — the old version only ever changed a
+    // label, since it had no audio files at all.
+    data class MusicTrack(val displayName: String, val resId: Int?)
+    val bundledMusicTracks = listOf(
+        MusicTrack("Vanguard Anthem", R.raw.music_battle_loop)
     )
+    var selectedMusicTrack by mutableStateOf(bundledMusicTracks.first().displayName)
+    var customMusicUri by mutableStateOf<String?>(null)
+    var customMusicName by mutableStateOf<String?>(null)
 
     // --- CUSTOM GAME RULES ---
     var ruleSystem by mutableStateOf(DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION)
@@ -950,12 +965,14 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 }
             }
 
-            // World Draughts Federation rules allow ordinary pieces to capture/jump backward as well!
-            val jumpDirs = if (piece.isKing || ruleSystem == DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION) {
-                directions
-            } else {
-                normalDirections
-            }
+            // Real-world rule check: in English draughts (EDA), American checkers (ACF), AND
+            // international draughts (FMJD) alike, an uncrowned man may ONLY move without
+            // capturing diagonally forward — but may CAPTURE in any of the four diagonal
+            // directions, including backward. This is a standard, well-documented rule across
+            // all three federations; it was previously restricted to forward-only captures for
+            // ACF/EDA, which doesn't match any real rulebook and made backward capture illegal
+            // in those two modes when it never should have been.
+            val jumpDirs = directions
             for (dir in jumpDirs) {
                 val r1 = piece.row + dir.first
                 val c1 = piece.col + dir.second
@@ -1225,18 +1242,27 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             // Distribute player experience and currency upon successful kill
             if (defenderDied && attacker.isRed) {
                 awardRewards(xpGained = 35, coinsGained = 20)
+                SoundManager.playSfx(SoundManager.Sfx.COIN)
             }
 
             activeCombat = null
 
             // --- MANDATORY MULTI-JUMP (CHAIN CAPTURE) ---
-            // Official draughts rules: if the capturing piece has ANOTHER jump available from its
-            // new square, it must keep capturing before the turn passes. Most rule sets also say a
-            // piece that is promoted to King mid-jump stops immediately, even if further jumps exist.
+            // If the capturing piece has ANOTHER jump available from its new square, it must keep
+            // capturing before the turn passes — universal across ACF, EDA, and FMJD.
+            //
+            // Promotion mid-capture is where the federations genuinely differ, and this used to
+            // treat them as the same everywhere:
+            //  - ACF (American checkers) & EDA (English draughts): reaching the king row during a
+            //    capturing move ends the turn immediately, even if the new king could jump again.
+            //  - FMJD (international draughts): the opposite — a man that becomes a king mid-capture
+            //    keeps going in the SAME turn, now capturing as a flying king if more jumps exist.
+            val stopsOnPromotion = ruleSystem != DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION
             val updatedAttacker = updatedPieces.firstOrNull { it.id == attacker.id }
             val justPromoted = updatedAttacker != null && !attacker.isKing && updatedAttacker.isKing
+            val haltsChain = justPromoted && stopsOnPromotion
 
-            if (!attackerDied && updatedAttacker != null && !justPromoted) {
+            if (!attackerDied && updatedAttacker != null && !haltsChain) {
                 val (_, continuedJumps) = getMovesAndJumpsForPieceRaw(updatedAttacker)
                 if (continuedJumps.isNotEmpty()) {
                     selectedPiece = updatedAttacker
@@ -1271,11 +1297,13 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
         if (!redRemaining) {
             winnerMessage = "SHADOW CLAN VICTORIOUS!"
+            SoundManager.playSfx(SoundManager.Sfx.DEFEAT)
             checkAndApplyTournamentMatchEnd()
             return
         }
         if (!blackRemaining) {
             winnerMessage = "VANGUARD ORDER VICTORIOUS!"
+            SoundManager.playSfx(SoundManager.Sfx.VICTORY_FANFARE)
             checkAndApplyTournamentMatchEnd()
             // Reward match victory bonus
             viewModelScope.launch {
@@ -1338,6 +1366,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 // No available moves, bot surrenders/passes
                 isBotThinking = false
                 winnerMessage = "VANGUARD ORDER VICTORIOUS! (Shadow trapped)"
+                SoundManager.playSfx(SoundManager.Sfx.VICTORY_FANFARE)
                 checkAndApplyTournamentMatchEnd()
             }
         }
@@ -1396,6 +1425,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 costCoins = cost,
                 earnCoins = 0
             )
+            SoundManager.playSfx(SoundManager.Sfx.UNLOCK)
         }
     }
 
@@ -1604,9 +1634,63 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     // Sound preferences
-    fun changeMusicTrack(track: String) {
-        selectedMusicTrack = track
-        triggerNotification("Now playing: $track")
+    fun changeMusicTrack(track: MusicTrack) {
+        selectedMusicTrack = track.displayName
+        customMusicUri = null
+        customMusicName = null
+        track.resId?.let { SoundManager.playBundledMusic(it) }
+        triggerNotification("Now playing: ${track.displayName}")
+        viewModelScope.launch {
+            val state = playerState.value ?: return@launch
+            repository.updatePlayerState(state.copy(customMusicUri = null, customMusicName = null))
+        }
+    }
+
+    /**
+     * Called after the user picks a song via the system file/document picker (see MusicPicker.kt
+     * in the UI layer — Compose triggers the actual picker; this just handles the result).
+     * `context` is needed once, to hand the URI to MediaPlayer.
+     */
+    fun setCustomMusicTrack(context: Context, uri: android.net.Uri, displayName: String) {
+        val played = SoundManager.playCustomMusic(context, uri)
+        if (!played) {
+            triggerNotification("Couldn't play that file — try a different song.")
+            return
+        }
+        selectedMusicTrack = displayName
+        customMusicUri = uri.toString()
+        customMusicName = displayName
+        triggerNotification("Now playing your song: $displayName")
+        viewModelScope.launch {
+            val state = playerState.value ?: return@launch
+            repository.updatePlayerState(state.copy(customMusicUri = uri.toString(), customMusicName = displayName))
+        }
+    }
+
+    fun playSfx(sfx: SoundManager.Sfx) = SoundManager.playSfx(sfx)
+
+    /** Called once from MainActivity.onCreate to resume whatever music the player last had set. */
+    fun restoreSavedAudioPreferences(context: Context) {
+        viewModelScope.launch {
+            val state = playerState.first { it != null } ?: return@launch
+            SoundManager.musicVolume = musicVolume
+            SoundManager.sfxVolume = soundVolume
+
+            val savedUri = state.customMusicUri
+            if (savedUri != null) {
+                val uri = android.net.Uri.parse(savedUri)
+                val played = SoundManager.playCustomMusic(context, uri)
+                if (played) {
+                    selectedMusicTrack = state.customMusicName ?: "Your Music"
+                    customMusicUri = savedUri
+                    customMusicName = state.customMusicName
+                    return@launch
+                }
+                // Permission to that file may have been revoked (e.g. the file was deleted) —
+                // fall through to the bundled track instead of silently playing nothing.
+            }
+            bundledMusicTracks.firstOrNull()?.resId?.let { SoundManager.playBundledMusic(it) }
+        }
     }
 
     // Online multiplayer lobby matchmaking & WebRTC simulator

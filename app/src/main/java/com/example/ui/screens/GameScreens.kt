@@ -17,6 +17,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -2154,13 +2156,34 @@ fun SyncScreen(viewModel: GameViewModel) {
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
+                // Real file picker: lets the player pick literally any audio file from their
+                // own device (Files app, Downloads, Google Drive, etc.) and use it as the
+                // in-game music track. Persisted so it survives app restarts.
+                val customSongPicker = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenDocument()
+                ) { uri: android.net.Uri? ->
+                    if (uri != null) {
+                        try {
+                            context.contentResolver.takePersistableUriPermission(
+                                uri,
+                                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            )
+                        } catch (_: SecurityException) {
+                            // Some providers don't support persistable permissions — playback will
+                            // still work for this session, it just might not survive a restart.
+                        }
+                        val displayName = queryFileDisplayName(context, uri) ?: "Custom Track"
+                        viewModel.setCustomMusicTrack(context, uri, displayName)
+                    }
+                }
+
                 // Track Selection Row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Selected Symphony Track:", color = TextWhite, fontSize = 12.sp)
+                    Text("Selected Track:", color = TextWhite, fontSize = 12.sp)
                     var expandedMusicDropdown by remember { mutableStateOf(false) }
                     Box {
                         Button(
@@ -2178,17 +2201,34 @@ fun SyncScreen(viewModel: GameViewModel) {
                             onDismissRequest = { expandedMusicDropdown = false },
                             modifier = Modifier.background(DarkSurface)
                         ) {
-                            viewModel.musicTracks.forEach { track ->
+                            viewModel.bundledMusicTracks.forEach { track ->
                                 DropdownMenuItem(
-                                    text = { Text(track, color = TextWhite, fontSize = 12.sp) },
+                                    text = { Text(track.displayName, color = TextWhite, fontSize = 12.sp) },
                                     onClick = {
                                         viewModel.changeMusicTrack(track)
                                         expandedMusicDropdown = false
                                     }
                                 )
                             }
+                            Divider(color = Color(0x1AFFFFFF))
+                            DropdownMenuItem(
+                                text = { Text("📁 Upload your own song...", color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                                onClick = {
+                                    expandedMusicDropdown = false
+                                    customSongPicker.launch(arrayOf("audio/*"))
+                                }
+                            )
                         }
                     }
+                }
+
+                if (viewModel.customMusicUri != null) {
+                    Text(
+                        "🎵 Playing your own song: ${viewModel.customMusicName}",
+                        color = Color(0xFF00E676),
+                        fontSize = 10.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -2327,22 +2367,26 @@ fun SyncScreen(viewModel: GameViewModel) {
                     Column(modifier = Modifier.padding(8.dp)) {
                         Text(
                             text = when (viewModel.ruleSystem) {
-                                DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION -> 
+                                DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION ->
                                     "American Checker Federation (ACF):\n" +
                                     " • Plays on standard 8x8 Board.\n" +
-                                    " • Men move and jump ONLY forward.\n" +
+                                    " • Men move forward only, but can JUMP forward or backward.\n" +
                                     " • Kings are NOT sliding (move/jump 1 square max).\n" +
+                                    " • A man promoted to King mid-capture stops immediately, even if more jumps exist.\n" +
                                     " • Jumps are mandatory (Forced Jumps: ON)."
-                                DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION -> 
+                                DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION ->
                                     "English Draughts Association (EDA):\n" +
                                     " • Plays on standard 8x8 Board.\n" +
-                                    " • Traditional Go-As-You-Please (GAYP) rules.\n" +
-                                    " • Standard ACF move limits, with support for EDA's official tournament opening pairings."
-                                DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION -> 
+                                    " • Same core rules as ACF: men jump forward or backward, kings move one square.\n" +
+                                    " • Traditional Go-As-You-Please (GAYP) rules, with EDA's official 3-move tournament openings.\n" +
+                                    " • A man promoted to King mid-capture stops immediately, even if more jumps exist."
+                                DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION ->
                                     "World Draughts Federation (FMJD):\n" +
                                     " • Plays on expanded 10x10 Board (20 pieces each!).\n" +
-                                    " • Men move forward, but can jump both FORWARD and BACKWARD!\n" +
+                                    " • Men move forward only, but can jump both FORWARD and BACKWARD.\n" +
                                     " • Kings are FLYING KINGS (can slide diagonally any distance).\n" +
+                                    " • A man promoted to King mid-capture keeps going in the SAME turn — it continues\n" +
+                                    "   capturing as a flying king if more jumps are available (unlike ACF/EDA).\n" +
                                     " • Jumps are mandatory (Forced Jumps: ON)."
                             },
                             color = TextGray,
@@ -4029,3 +4073,15 @@ fun PremiumPaymentPortalDialog(viewModel: GameViewModel) {
     }
 }
 
+
+/** Resolves a human-friendly file name for a content:// URI, e.g. "MyFavoriteSong.mp3". */
+private fun queryFileDisplayName(context: android.content.Context, uri: android.net.Uri): String? {
+    return try {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (cursor.moveToFirst() && nameIndex >= 0) cursor.getString(nameIndex) else null
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
