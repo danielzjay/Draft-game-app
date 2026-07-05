@@ -60,24 +60,3 @@ data class LeaderboardEntry(
     val isCurrentUser: Boolean = false,
     val isBot: Boolean = false
 )
-
-data class LeagueMatch(
-    val id: String,
-    val player1: String,
-    val player2: String,
-    val scheduledTime: String,
-    val status: String, // "Scheduled", "Playing", "Completed", "Forfeited"
-    val winner: String? = null,
-    val reward: String = "150 BLC Coins",
-    val ruleSystemOverride: String? = null
-)
-
-data class LadderTier(
-    val rankIndex: Int, // 1 to 5 (Bottom to Top)
-    val title: String, // e.g. "Bottom Qualifier", "Quarter-Finals", "Semi-Finals", "Vanguard Championship"
-    val opponentName: String,
-    val opponentHero: String,
-    val isCompleted: Boolean,
-    val winnerName: String? = null,
-    val prize: String
-)

@@ -436,10 +436,10 @@ fun BattleScreen(viewModel: GameViewModel) {
                     text = when (viewModel.selectedGameMode) {
                         GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "Play with a friend locally on the same device. No account link required."
                         GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "Battle the local dark core bot offline for casual training."
-                        GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "Practice online with high performance AI bot hosted in cloud containers."
-                        GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "Matches you with an AI arena rival (real cross-device multiplayer isn't built yet)."
-                        GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "Football-style league tables. First register, then play according to the fixture schedule."
-                        GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "Bottom-Up progression ladder. Defeat opponents in order to reach Rank 1."
+                        GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "Practice against an AI opponent (not a real person) with online-style presentation."
+                        GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "Real matchmaking — get paired with another real signed-in player."
+                        GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "Real round-robin leagues, organized by real players. Register, then play your fixture schedule."
+                        GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "Real single-elimination brackets, organized by real players."
                     },
                     color = TextGray,
                     fontSize = 10.sp,
@@ -447,381 +447,27 @@ fun BattleScreen(viewModel: GameViewModel) {
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                // --- COMPETITIONS DISPLAY EXPANSION PANEL ---
-                if (viewModel.selectedGameMode == GameViewModel.SelectedGameMode.COMPETITION_LEAGUE) {
-                    Divider(color = Color(0x1AFFFFFF), modifier = Modifier.padding(vertical = 4.dp))
-                    if (!viewModel.isRegisteredVanguardLeague) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1510)),
-                                border = BorderStroke(1.dp, AmberGold.copy(alpha = 0.5f)),
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Text("🏆 COMPETITION ORGANISER WORKSHOP", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    Text("Configure custom competition rules, registration fees, and rewards.", color = TextGray, fontSize = 8.sp)
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    
-                                    // Name Input
-                                    Text("Competition Name", color = TextWhite, fontSize = 8.sp)
-                                    OutlinedTextField(
-                                        value = viewModel.customCompetitionName,
-                                        onValueChange = { viewModel.customCompetitionName = it },
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedTextColor = TextWhite,
-                                            unfocusedTextColor = TextWhite,
-                                            focusedBorderColor = AmberGold,
-                                            unfocusedBorderColor = Color.Gray,
-                                            focusedContainerColor = Color.Black,
-                                            unfocusedContainerColor = Color.Black
-                                        ),
-                                        textStyle = TextStyle(fontSize = 10.sp),
-                                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                                        singleLine = true
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-
-                                    // Rule System Selector
-                                    Text("Baseline Rules System", color = TextWhite, fontSize = 8.sp)
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        val rulesOptions = listOf(
-                                            DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION to "ACF (8x8)",
-                                            DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION to "EDA (8x8)",
-                                            DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION to "WDF (10x10)"
-                                        )
-                                        rulesOptions.forEach { (system, label) ->
-                                            val isSelected = viewModel.customCompetitionRuleSystem == system
-                                            Button(
-                                                onClick = { viewModel.customCompetitionRuleSystem = system },
-                                                colors = ButtonDefaults.buttonColors(
-                                                    containerColor = if (isSelected) AmberGold else Color.Black
-                                                ),
-                                                border = BorderStroke(1.dp, if (isSelected) AmberGold else Color.DarkGray),
-                                                modifier = Modifier.weight(1f).height(28.dp),
-                                                contentPadding = PaddingValues(0.dp)
-                                            ) {
-                                                Text(label, color = if (isSelected) DarkBg else TextWhite, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Direct Level Overrides", color = TextWhite, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            Text("Allow scheduled matches to use different rulebooks", color = TextGray, fontSize = 7.sp)
-                                        }
-                                        Switch(
-                                            checked = viewModel.customCompetitionLevelOverrides,
-                                            onCheckedChange = { viewModel.customCompetitionLevelOverrides = it },
-                                            colors = SwitchDefaults.colors(
-                                                checkedThumbColor = AmberGold,
-                                                checkedTrackColor = AmberGold.copy(alpha = 0.5f)
-                                            ),
-                                            modifier = Modifier.scale(0.7f)
-                                        )
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("RPG Combat Stats Engine", color = TextWhite, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            Text("Enable custom HP, ATK and counter damage", color = TextGray, fontSize = 7.sp)
-                                        }
-                                        Switch(
-                                            checked = viewModel.customCompetitionCombatDraughts,
-                                            onCheckedChange = { viewModel.customCompetitionCombatDraughts = it },
-                                            colors = SwitchDefaults.colors(
-                                                checkedThumbColor = AmberGold,
-                                                checkedTrackColor = AmberGold.copy(alpha = 0.5f)
-                                            ),
-                                            modifier = Modifier.scale(0.7f)
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        // Registration Fee Selection
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Registration Fee", color = TextWhite, fontSize = 8.sp)
-                                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                listOf(0, 50, 100, 250).forEach { fee ->
-                                                    val isSelected = viewModel.customCompetitionRegistrationFee == fee
-                                                    Button(
-                                                        onClick = { viewModel.customCompetitionRegistrationFee = fee },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = if (isSelected) AmberGold else Color.DarkGray
-                                                        ),
-                                                        modifier = Modifier.weight(1f).height(20.dp),
-                                                        contentPadding = PaddingValues(0.dp)
-                                                    ) {
-                                                        Text("${fee} B", color = if (isSelected) DarkBg else TextWhite, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        // Winner Prize Selection
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Winner Reward Pool", color = TextWhite, fontSize = 8.sp)
-                                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                                listOf(500, 1000, 1500, 2500).forEach { reward ->
-                                                    val isSelected = viewModel.customCompetitionRewardCoins == reward
-                                                    Button(
-                                                        onClick = { viewModel.customCompetitionRewardCoins = reward },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = if (isSelected) AmberGold else Color.DarkGray
-                                                        ),
-                                                        modifier = Modifier.weight(1f).height(20.dp),
-                                                        contentPadding = PaddingValues(0.dp)
-                                                    ) {
-                                                        Text("${reward} B", color = if (isSelected) DarkBg else TextWhite, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Button(
-                                        onClick = {
-                                            viewModel.setAndSetupCompetition(
-                                                viewModel.customCompetitionName,
-                                                viewModel.customCompetitionRuleSystem,
-                                                viewModel.customCompetitionCombatDraughts,
-                                                viewModel.customCompetitionRegistrationFee,
-                                                viewModel.customCompetitionRewardCoins,
-                                                viewModel.customCompetitionLevelOverrides
-                                            )
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
-                                        modifier = Modifier.fillMaxWidth().height(32.dp)
-                                    ) {
-                                        Text("LAUNCH & SAVE COMPETITION", color = DarkBg, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Column(
-                                modifier = Modifier.fillMaxWidth().background(Color(0xFF141F14), RoundedCornerShape(8.dp)).padding(8.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text("📝 ENTER COMPETITION: ${viewModel.customCompetitionName.uppercase()}", color = Color(0xFF00E676), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("Registration Fee: ${viewModel.customCompetitionRegistrationFee} BLC Coins  |  Grand Reward: ${viewModel.customCompetitionRewardCoins} BLC", color = TextWhite, fontSize = 9.sp)
-                                Text("Baseline Rules: ${viewModel.customCompetitionRuleSystem.displayName}", color = TextMuted, fontSize = 8.sp)
-                                if (viewModel.customCompetitionLevelOverrides) {
-                                    Text("⚠️ LEVEL OVERRIDES ALLOWED: Different stages utilize ACF, EDA, and WDF rules!", color = AmberGold, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Button(
-                                    onClick = { viewModel.registerForVanguardLeague() },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
-                                    modifier = Modifier.height(28.dp)
-                                ) {
-                                    Text("PAY FEE & REGISTER NOW", color = DarkBg, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                                }
-                            }
-                        }
-                    } else {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFF141F14)),
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(6.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text("🏆 ACTIVE: ${viewModel.customCompetitionName}", color = Color(0xFF00E676), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Box(
-                                            modifier = Modifier.background(Color(0x3300E676), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text("REGISTERED & PAID", color = Color(0xFF00E676), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                    Text("Reward Pool: ${viewModel.customCompetitionRewardCoins} BLC | Rules: ${viewModel.customCompetitionRuleSystem.displayName}", color = TextWhite, fontSize = 8.sp)
-                                    if (viewModel.customCompetitionLevelOverrides) {
-                                        Text("Notice: Levels use distinct rulesets. Prepare your strategies!", color = AmberGold, fontSize = 8.sp)
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("League Fixtures & Brackets:", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            viewModel.leagueMatchesState.forEach { match ->
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant),
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(6.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("${match.player1} VS ${match.player2}", color = TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                            val rulesText = match.ruleSystemOverride ?: viewModel.customCompetitionRuleSystem.displayName
-                                            Text("Rulebook: $rulesText", color = AmberGold, fontSize = 8.sp)
-                                            Text("Sched: ${match.scheduledTime} | Prize: ${match.reward}", color = TextGray, fontSize = 8.sp)
-                                            if (match.status == "Completed") {
-                                                Text("Outcome: Winner - ${match.winner ?: "Draw"}", color = Color(0xFF00E676), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                        if (match.status != "Completed") {
-                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Button(
-                                                    onClick = { viewModel.playLeagueMatch(match) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
-                                                    contentPadding = PaddingValues(horizontal = 6.dp),
-                                                    modifier = Modifier.height(22.dp)
-                                                ) {
-                                                    Text("PLAY", color = DarkBg, fontSize = 8.sp, fontWeight = FontWeight.Black)
-                                                }
-                                                Button(
-                                                    onClick = { viewModel.autoResolveMatch(match.id) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                                    contentPadding = PaddingValues(horizontal = 6.dp),
-                                                    modifier = Modifier.height(22.dp)
-                                                ) {
-                                                    Text("AUTO-WIN SIM", color = Color.White, fontSize = 8.sp)
-                                                }
-                                            }
-                                        } else {
-                                            Icon(Icons.Default.CheckCircle, contentDescription = "Finished", tint = Color(0xFF00E676), modifier = Modifier.size(16.dp))
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                // These three modes now have real implementations (Firestore-backed matchmaking
+                // and tournaments — see OnlineScreens.kt) — hand off to them here, which skips
+                // past the old fake competition panels and local board below entirely for these
+                // modes. Those old panels are unreachable now rather than deleted outright, to
+                // keep this change smaller and lower-risk; safe to remove in a later cleanup pass.
+                when (viewModel.selectedGameMode) {
+                    GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> {
+                        com.example.ui.screens.RealOnlineMatchScreen(viewModel)
+                        return@Column
                     }
+                    GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> {
+                        com.example.ui.screens.TournamentBrowserScreen(viewModel, com.example.network.TournamentFormat.LEAGUE)
+                        return@Column
+                    }
+                    GameViewModel.SelectedGameMode.COMPETITION_LADDER -> {
+                        com.example.ui.screens.TournamentBrowserScreen(viewModel, com.example.network.TournamentFormat.BRACKET)
+                        return@Column
+                    }
+                    else -> {}
                 }
 
-                if (viewModel.selectedGameMode == GameViewModel.SelectedGameMode.COMPETITION_LADDER) {
-                    Divider(color = Color(0x1AFFFFFF), modifier = Modifier.padding(vertical = 4.dp))
-                    if (!viewModel.isRegisteredGladiatorLadder) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().background(Color(0xFF1E1510), RoundedCornerShape(8.dp)).padding(8.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text("ORGANISER PRIZE POOL: 2,500 BLC + TROPHY", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("Start at bottom Tier V. Win to progress. If offline, simulate automatic walkover wins.", color = TextMuted, fontSize = 9.sp, textAlign = TextAlign.Center)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Button(
-                                onClick = { viewModel.registerForGladiatorLadder() },
-                                colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
-                                modifier = Modifier.height(28.dp)
-                            ) {
-                                Text("REGISTER FOR BRACKETS", color = DarkBg, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                            }
-                        }
-                    } else {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Gladiator Brackets Ascent Map:", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                Text("Active Tier Index: #${viewModel.currentLadderTierIndex + 1}", color = Color(0xFFFFB300), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            viewModel.ladderRoundsState.forEachIndexed { idx, tier ->
-                                val isActive = idx == viewModel.currentLadderTierIndex
-                                val isCleared = tier.isCompleted
-                                
-                                Card(
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isActive) Color(0xFF261D15) else if (isCleared) Color(0xFF131F14) else DarkSurfaceVariant
-                                    ),
-                                    border = BorderStroke(1.dp, if (isActive) AmberGold else Color.Transparent),
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(tier.title, color = if (isActive) AmberGold else if (isCleared) Color(0xFF00E676) else TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                            Text("Rival: ${tier.opponentName} | Prize: ${tier.prize}", color = TextGray, fontSize = 8.sp)
-                                        }
-                                        if (isCleared) {
-                                            Text("CLEARED", color = Color(0xFF00E676), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                        } else if (isActive) {
-                                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                Button(
-                                                    onClick = { viewModel.playLadderMatchIndex(idx) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
-                                                    contentPadding = PaddingValues(horizontal = 6.dp),
-                                                    modifier = Modifier.height(22.dp)
-                                                ) {
-                                                    Text("BATTLE", color = DarkBg, fontSize = 8.sp, fontWeight = FontWeight.Black)
-                                                }
-                                                Button(
-                                                    onClick = { viewModel.completeLadderMatch(isVictory = true) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
-                                                    contentPadding = PaddingValues(horizontal = 6.dp),
-                                                    modifier = Modifier.height(22.dp)
-                                                ) {
-                                                    Text("WALKOVER WIN", color = Color.White, fontSize = 8.sp)
-                                                }
-                                            }
-                                        } else {
-                                            Icon(Icons.Default.Lock, contentDescription = "Locked", tint = Color.Gray, modifier = Modifier.size(14.dp))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Divider(color = Color(0x11FFFFFF), modifier = Modifier.padding(vertical = 6.dp))
-
-                // Action turn display
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .clip(CircleShape)
-                            .background(if (viewModel.turnRed) RedCrimson else VioletNeon)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (viewModel.turnRed) "VANGUARD'S TURN (Red/Gold Heroes)" else "SHADOW CLAN'S TURN (Purple/Violet Bot)",
-                        color = if (viewModel.turnRed) RedCrimson else VioletNeon,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    if (viewModel.isBotThinking) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        CircularProgressIndicator(
-                            color = VioletNeon,
-                            modifier = Modifier.size(12.dp),
-                            strokeWidth = 1.5.dp
-                        )
-                    }
-                }
             }
         }
 
@@ -2903,171 +2549,30 @@ fun SyncScreen(viewModel: GameViewModel) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // SECTION 9: Remote Administration Control Console
-        // Now that Google Sign-In is real, this check uses your genuine authenticated email —
-        // but it's still enforced entirely on-device. It hides the panel from other players in
-        // the normal app, but it is NOT real access control: anyone with a decompiler could
-        // patch this condition out of a rebuilt APK and reach adminGrantCoins()/adminApplyModifier()
-        // regardless of who's signed in, since nothing here is verified by a server. That's fine
-        // for a single-player local economy (worst case, someone cheats their own save file), but
-        // don't rely on this if coins ever back something server-authoritative like a shared
-        // leaderboard or a cash-out feature.
-        val isUserAdmin = viewModel.isGoogleSignedIn && viewModel.signedInEmail == "mukasadaniel.daniel@gmail.com"
-
-        if (isUserAdmin) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A0F0F)),
-                border = BorderStroke(1.dp, RedCrimson),
+        // Admin tooling now lives entirely outside the app, at management.awishworldgroup.xyz —
+        // that's the right call: nothing that grants currency or flips game rules should be
+        // reachable inside a client APK, since anyone with a decompiler can patch around an
+        // on-device check regardless of how it's gated. This button is just a convenience link,
+        // still gated to your real signed-in email — it has no admin powers of its own.
+        if (viewModel.isGoogleSignedIn && viewModel.signedInEmail == "mukasadaniel.daniel@gmail.com") {
+            OutlinedButton(
+                onClick = {
+                    val intent = android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://management.awishworldgroup.xyz")
+                    )
+                    context.startActivity(intent)
+                },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AmberGold),
+                border = BorderStroke(1.dp, AmberGold),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.SettingsRemote, contentDescription = "Admin", tint = RedCrimson, modifier = Modifier.size(24.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "ADMINISTRATION CONTROL BACKEND",
-                            color = RedCrimson,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                    Text(
-                        "Remotely modify gameplay states, inject user currency balances, and toggle physical game-rules rules instantly.",
-                        color = TextGray,
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
-                    )
-
-                    // Admin field 1: Grant Currency Balance
-                    Text("Remote Currency Grant override:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    var grantAmountText by remember { mutableStateOf("1000") }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = grantAmountText,
-                            onValueChange = { grantAmountText = it },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = RedCrimson,
-                                unfocusedBorderColor = Color.DarkGray,
-                                focusedContainerColor = Color.Black,
-                                unfocusedContainerColor = Color.Black
-                            ),
-                            modifier = Modifier.weight(1f).height(46.dp),
-                            singleLine = true,
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 11.sp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Button(
-                            onClick = {
-                                val amt = grantAmountText.toIntOrNull() ?: 1000
-                                viewModel.adminGrantCoins(amt)
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
-                            modifier = Modifier.height(42.dp)
-                        ) {
-                            Text("Grant Coins", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Admin field 2: Set Bot difficulty level
-                    Text("Remote Bot Core level configuration:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    var expandedDiffDropdown by remember { mutableStateOf(false) }
-                    Box(modifier = Modifier.padding(top = 4.dp)) {
-                        Button(
-                            onClick = { expandedDiffDropdown = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                            border = BorderStroke(1.dp, Color.DarkGray),
-                            modifier = Modifier.fillMaxWidth().height(36.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp)
-                        ) {
-                            Text("BOT LEVEL: " + viewModel.adminCustomBotDifficulty, color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Select", tint = AmberGold)
-                        }
-                        DropdownMenu(
-                            expanded = expandedDiffDropdown,
-                            onDismissRequest = { expandedDiffDropdown = false },
-                            modifier = Modifier.background(Color.Black)
-                        ) {
-                            listOf("EASY (V1)", "MEDIUM (V2)", "HARD (V3)", "IMPOSSIBLE (V4)").forEach { lvl ->
-                                DropdownMenuItem(
-                                    text = { Text(lvl, color = TextWhite, fontSize = 11.sp) },
-                                    onClick = {
-                                        viewModel.adminCustomBotDifficulty = lvl
-                                        viewModel.triggerNotification("Admin: Set Bot Difficulty to $lvl")
-                                        expandedDiffDropdown = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Admin field 3: Global Game Modifier Injection
-                    Text("Remote Global Mode modifier injection:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        val modifiersList = listOf("One Hit KO Mode", "1 HP Sudden Death", "Standard Default")
-                        modifiersList.forEach { mode ->
-                            Button(
-                                onClick = { viewModel.adminApplyModifier(mode) },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = if (viewModel.adminGlobalModifier == mode) RedCrimson else Color.Black
-                                ),
-                                border = BorderStroke(1.dp, if (viewModel.adminGlobalModifier == mode) RedCrimson else Color.DarkGray),
-                                modifier = Modifier.weight(1f).height(34.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp)
-                            ) {
-                                Text(
-                                    text = mode.replace("Mode", "").replace("Default", "Reset"),
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (viewModel.adminGlobalModifier == mode) Color.White else TextGray
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = BorderStroke(1.dp, Color(0x33FFFFFF)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Lock, contentDescription = "Admin locked", tint = TextMuted, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "REMOTE PARAMETERS CONSOLE LOCKED",
-                            color = TextMuted,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Text(
-                        "Access is restricted to authorized email accounts. Log in with mukasadaniel.daniel@gmail.com to activate remote controls.",
-                        color = TextGray,
-                        fontSize = 9.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
-                }
+                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Open Admin Panel", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
+
     }
 }
 

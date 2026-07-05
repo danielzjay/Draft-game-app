@@ -341,296 +341,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         resetGame()
     }
 
-    // --- COMPETITIONS STATE & ENGINE ---
-    var isRegisteredVanguardLeague by mutableStateOf(false)
-    var isRegisteredGladiatorLadder by mutableStateOf(false)
-    var activeTournamentStatus by mutableStateOf("Not Started") // "Not Started", "Registered", "Active", "Completed"
-    var activeLeagueMatchId by mutableStateOf<String?>(null)
-
-    // --- ORGANISER COMPETITION SETTINGS ---
-    var customCompetitionName by mutableStateOf("Vanguard Championship Cup")
-    var customCompetitionRuleSystem by mutableStateOf(DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION)
-    var customCompetitionCombatDraughts by mutableStateOf(true)
-    var customCompetitionRegistrationFee by mutableStateOf(100)
-    var customCompetitionRewardCoins by mutableStateOf(1000)
-    var customCompetitionLevelOverrides by mutableStateOf(true) // Whether direct levels/matches can use different rules!
-    var hasCustomCompetitionBeenSet by mutableStateOf(true) // Display organiser settings
-    
-    var leagueMatchesState by mutableStateOf<List<LeagueMatch>>(
-        listOf(
-            LeagueMatch("M1", "Daniel Mukasa", "Shadow Overlord", "12:00 PM (Scheduled)", "Scheduled", reward = "500 BLC Coins", ruleSystemOverride = "American Checker Federation (8x8)"),
-            LeagueMatch("M2", "CheckersPro", "Lord Karr", "12:30 PM (Scheduled)", "Scheduled", reward = "300 BLC Coins", ruleSystemOverride = "English Draughts Association (8x8)"),
-            LeagueMatch("M3", "Daniel Mukasa", "Aurelia Bot", "01:00 PM (Scheduled)", "Scheduled", reward = "1000 BLC Coins", ruleSystemOverride = "World Draughts Federation (10x10)"),
-            LeagueMatch("M4", "Slayer3000", "Valkyrie Grace", "01:30 PM (Scheduled)", "Scheduled", reward = "500 BLC Coins", ruleSystemOverride = "American Checker Federation (8x8)")
-        )
-    )
-
-    var ladderRoundsState by mutableStateOf<List<LadderTier>>(
-        listOf(
-            LadderTier(1, "Tier V: Qualifier Pit", "Rookie Shadow Grunt", "assassin", false, prize = "200 BLC"),
-            LadderTier(2, "Tier IV: Combat Arena", "Aether Acolyte", "mage", false, prize = "400 BLC"),
-            LadderTier(3, "Tier III: Inner Sanctum", "Vanguard Gatekeeper", "knight", false, prize = "600 BLC"),
-            LadderTier(4, "Tier II: Champion Trial", "Freya Shieldmaiden", "valkyrie", false, prize = "1000 BLC + Crown Badge"),
-            LadderTier(5, "Tier I: Supreme Throne", "Lord Malakor Shadow", "necromancer", false, prize = "2500 BLC + Champion Trophy")
-        )
-    )
-
-    var currentLadderTierIndex by mutableStateOf(0) // Start at bottom tier 0 (rankIndex 1)
-
-    fun setAndSetupCompetition(
-        name: String,
-        ruleSystem: DraughtsRuleSystem,
-        combatEnabled: Boolean,
-        regFee: Int,
-        rewardCoins: Int,
-        levelOverrides: Boolean
-    ) {
-        customCompetitionName = name
-        customCompetitionRuleSystem = ruleSystem
-        customCompetitionCombatDraughts = combatEnabled
-        customCompetitionRegistrationFee = regFee
-        customCompetitionRewardCoins = rewardCoins
-        customCompetitionLevelOverrides = levelOverrides
-        hasCustomCompetitionBeenSet = true
-        isRegisteredVanguardLeague = false // Require new registration with fee!
-        activeTournamentStatus = "Not Started"
-
-        // Generate dynamic league match levels based on settings!
-        leagueMatchesState = listOf(
-            LeagueMatch(
-                id = "M1",
-                player1 = "Daniel Mukasa",
-                player2 = "Shadow Overlord",
-                scheduledTime = "12:00 PM (Scheduled)",
-                status = "Scheduled",
-                reward = "${rewardCoins / 2} BLC Coins",
-                ruleSystemOverride = if (levelOverrides) "American Checker Federation (8x8)" else null
-            ),
-            LeagueMatch(
-                id = "M2",
-                player1 = "CheckersPro",
-                player2 = "Lord Karr",
-                scheduledTime = "12:30 PM (Scheduled)",
-                status = "Scheduled",
-                reward = "${rewardCoins / 3} BLC Coins",
-                ruleSystemOverride = if (levelOverrides) "English Draughts Association (8x8)" else null
-            ),
-            LeagueMatch(
-                id = "M3",
-                player1 = "Daniel Mukasa",
-                player2 = "Aurelia Bot",
-                scheduledTime = "01:00 PM (Scheduled)",
-                status = "Scheduled",
-                reward = "$rewardCoins BLC Coins",
-                ruleSystemOverride = if (levelOverrides) "World Draughts Federation (10x10)" else null
-            ),
-            LeagueMatch(
-                id = "M4",
-                player1 = "Slayer3000",
-                player2 = "Valkyrie Grace",
-                scheduledTime = "01:30 PM (Scheduled)",
-                status = "Scheduled",
-                reward = "${rewardCoins / 2} BLC Coins",
-                ruleSystemOverride = if (levelOverrides) "American Checker Federation (8x8)" else null
-            )
-        )
-        triggerNotification("Organiser Competition '$name' successfully set up! Registration fee is $regFee BLC.")
-    }
-
-    fun registerForVanguardLeague() {
-        if (isRegisteredVanguardLeague) return
-        
-        val currentCoins = playerState.value?.draughtCoins ?: 0
-        if (currentCoins < customCompetitionRegistrationFee) {
-            triggerNotification("Insufficient Coins! Registering requires $customCompetitionRegistrationFee BLC, you have $currentCoins BLC.")
-            return
-        }
-
-        isRegisteredVanguardLeague = true
-        activeTournamentStatus = "Scheduled"
-        triggerNotification("Registered for '$customCompetitionName'! Fee of $customCompetitionRegistrationFee BLC deducted. First match scheduled at 12:00 PM.")
-        
-        viewModelScope.launch {
-            // Deduct coins using state updater
-            playerState.value?.let { state ->
-                repository.updatePlayerState(state.copy(draughtCoins = state.draughtCoins - customCompetitionRegistrationFee))
-            }
-            repository.mineNewBlock(
-                transactions = "[COMP] Player Registered for '$customCompetitionName' - Fee Paid: $customCompetitionRegistrationFee BLC",
-                costCoins = customCompetitionRegistrationFee,
-                earnCoins = 0
-            )
-        }
-    }
-
-    fun playLeagueMatch(match: LeagueMatch) {
-        if (!isRegisteredVanguardLeague) {
-            triggerNotification("Please register first for the Competition!")
-            return
-        }
-
-        activeLeagueMatchId = match.id
-        onlineOpponentName = match.player2
-        isOnlineMode = true
-        isVsBot = true
-
-        // Apply competition/level-specific rules
-        if (customCompetitionLevelOverrides && match.ruleSystemOverride != null) {
-            when {
-                match.ruleSystemOverride.contains("American") -> {
-                    ruleSystem = DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION
-                    ruleFlyingKings = false
-                }
-                match.ruleSystemOverride.contains("English") || match.ruleSystemOverride.contains("EDA") -> {
-                    ruleSystem = DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION
-                    ruleFlyingKings = false
-                }
-                match.ruleSystemOverride.contains("World") || match.ruleSystemOverride.contains("FMJD") || match.ruleSystemOverride.contains("10x10") -> {
-                    ruleSystem = DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION
-                    ruleFlyingKings = true
-                }
-            }
-            triggerNotification("Level Rule Override: Playing under ${match.ruleSystemOverride}!")
-        } else {
-            ruleSystem = customCompetitionRuleSystem
-            ruleFlyingKings = (customCompetitionRuleSystem == DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION)
-            triggerNotification("Playing under Organizer baseline rules: ${ruleSystem.displayName}!")
-        }
-
-        ruleCombatDraughts = customCompetitionCombatDraughts
-        resetGame()
-    }
-
-    fun checkAndApplyTournamentMatchEnd() {
-        val winner = winnerMessage ?: return
-        val activeId = activeLeagueMatchId ?: return
-
-        val isVanguardWin = winner.contains("VANGUARD")
-        
-        leagueMatchesState = leagueMatchesState.map { match ->
-            if (match.id == activeId) {
-                if (isVanguardWin) {
-                    val rewardInt = match.reward.filter { it.isDigit() }.toIntOrNull() ?: 150
-                    viewModelScope.launch {
-                        grantCoinsToState(rewardInt)
-                        triggerNotification("Tournament Match Won! Awarded $rewardInt BLC!")
-                    }
-                    match.copy(status = "Completed", winner = playerState.value?.playerName ?: "Daniel Mukasa")
-                } else {
-                    triggerNotification("Tournament Match Lost! Winner: ${match.player2}")
-                    match.copy(status = "Completed", winner = match.player2)
-                }
-            } else match
-        }
-        
-        activeLeagueMatchId = null
-        
-        // Check if all matches are completed
-        val allCompleted = leagueMatchesState.all { it.status == "Completed" }
-        if (allCompleted) {
-            activeTournamentStatus = "Completed"
-            triggerNotification("Congratulations! You completed the '$customCompetitionName'!")
-        }
-    }
-
-    fun registerForGladiatorLadder() {
-        if (isRegisteredGladiatorLadder) return
-        isRegisteredGladiatorLadder = true
-        currentLadderTierIndex = 0
-        triggerNotification("Registered for Gladiator Bracket Ladder! Prepare to climb from Tier V!")
-        
-        viewModelScope.launch {
-            repository.mineNewBlock(
-                transactions = "[COMP] Player Registered for Gladiator Bottom-Up Bracket Climb",
-                costCoins = 0,
-                earnCoins = 0
-            )
-        }
-    }
-
-    // Auto-resolve or failure simulation in competitions
-    fun autoResolveMatch(matchId: String) {
-        viewModelScope.launch {
-            delay(1000)
-            leagueMatchesState = leagueMatchesState.map { match ->
-                if (match.id == matchId) {
-                    val isWin = Random.nextBoolean()
-                    val winnerName = if (isWin) "Daniel Mukasa" else match.player2
-                    val rewardEarned = if (isWin) 500 else 0
-                    if (isWin) {
-                        grantCoinsToState(rewardEarned)
-                        triggerNotification("Match Auto-Won! You won $rewardEarned BLC Coins!")
-                    } else {
-                        triggerNotification("Opponent claimed Victory (Offline Auto-Resolve)")
-                    }
-                    match.copy(status = "Completed", winner = winnerName)
-                } else match
-            }
-        }
-    }
-
-    // Play specific ladder match
-    fun playLadderMatchIndex(index: Int) {
-        val tier = ladderRoundsState[index]
-        onlineOpponentName = tier.opponentName
-        isOnlineMode = true
-        isVsBot = true // Played vs the specific bot hero
-        
-        // Temporarily assign opponent avatar/name for battle
-        triggerNotification("Entering Bracket Battle vs ${tier.opponentName}!")
-        currentTab = GameTab.BATTLE
-        resetGame()
-    }
-
-    // Complete active ladder match (Simulated Win/Lose from Game Board)
-    fun completeLadderMatch(isVictory: Boolean) {
-        if (!isRegisteredGladiatorLadder) return
-        val currentTier = ladderRoundsState[currentLadderTierIndex]
-        
-        if (isVictory) {
-            val rewardCoins = when (currentLadderTierIndex) {
-                0 -> 200
-                1 -> 400
-                2 -> 600
-                3 -> 1000
-                4 -> 2500
-                else -> 100
-            }
-            grantCoinsToState(rewardCoins)
-            triggerNotification("🏆 VICTORY! Cleared ${currentTier.title}! Earned $rewardCoins BLC!")
-            SoundManager.playSfx(SoundManager.Sfx.MATCH_COMPLETE)
-            
-            // Advance tier or claim victory trophy
-            ladderRoundsState = ladderRoundsState.mapIndexed { i, tier ->
-                if (i == currentLadderTierIndex) {
-                    tier.copy(isCompleted = true, winnerName = "Daniel Mukasa")
-                } else tier
-            }
-            
-            if (currentLadderTierIndex < 4) {
-                currentLadderTierIndex++
-            } else {
-                triggerNotification("👑 CONGRATULATIONS! You are the Absolute #1 Champion of the Realm!")
-            }
-            
-            viewModelScope.launch {
-                repository.mineNewBlock(
-                    transactions = "[COMP] Cleared ${currentTier.title}! Champion Reward: $rewardCoins Coins",
-                    costCoins = 0,
-                    earnCoins = rewardCoins
-                )
-            }
-        } else {
-            triggerNotification("Defeat in ${currentTier.title}. Prepare your strategy and try again!")
-        }
-    }
-
-    private fun grantCoinsToState(amount: Int) {
-        viewModelScope.launch {
-            val state = playerState.value ?: PlayerState()
-            repository.updatePlayerState(state.copy(draughtCoins = state.draughtCoins + amount))
-        }
-    }
 
     // --- ADVANCED CRYPTOGRAPHY AND CODE PROTECTION SUITE ---
     var isDatabaseEncrypted by mutableStateOf(true) // SQLCipher simulation
@@ -772,26 +482,327 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var onlineOpponentName by mutableStateOf("Rival_Shadow_X")
     var activeOnlineCompetitionId by mutableStateOf<String?>(null)
 
+    // --- REAL ONLINE 1v1 PVP (Firestore-backed, see OnlineMatchRepository) ---
+    var isSearchingRealMatch by mutableStateOf(false)
+    var activeOnlineMatch by mutableStateOf<com.example.network.OnlineMatch?>(null)
+    var selectedOnlineSquare by mutableStateOf<Pair<Int, Int>?>(null)
+    var onlineMatchError by mutableStateOf<String?>(null)
+    private var matchmakingJob: kotlinx.coroutines.Job? = null
+    private var matchObserverJob: kotlinx.coroutines.Job? = null
+
+    val myUid: String? get() = com.example.auth.GoogleAuthManager.currentUser()?.uid
+
+    fun startRealMatchmaking() {
+        if (isSearchingRealMatch) return
+        val name = playerState.value?.playerName ?: "Player"
+        val mmr = playerState.value?.mmr ?: 1000
+        isSearchingRealMatch = true
+        onlineMatchError = null
+        matchmakingJob = viewModelScope.launch {
+            val joinResult = com.example.network.OnlineMatchRepository.joinQueue(name, mmr, ruleSystem.name)
+            if (joinResult.isFailure) {
+                onlineMatchError = joinResult.exceptionOrNull()?.message ?: "Couldn't join matchmaking."
+                isSearchingRealMatch = false
+                return@launch
+            }
+            // Watch our own queue entry in case someone else pairs with us first
+            launch {
+                com.example.network.OnlineMatchRepository.observeOwnQueueEntry().collect { matchId ->
+                    if (matchId != null && isSearchingRealMatch) {
+                        onRealMatchFound(matchId)
+                    }
+                }
+            }
+            // Also actively try to pair ourselves every few seconds
+            while (isSearchingRealMatch) {
+                val matchId = com.example.network.OnlineMatchRepository.attemptPairing(ruleSystem.name)
+                if (matchId != null) {
+                    onRealMatchFound(matchId)
+                    break
+                }
+                delay(3000)
+            }
+        }
+    }
+
+    private fun onRealMatchFound(matchId: String) {
+        isSearchingRealMatch = false
+        matchmakingJob?.cancel()
+        observeRealMatch(matchId)
+    }
+
+    fun cancelRealMatchmaking() {
+        isSearchingRealMatch = false
+        matchmakingJob?.cancel()
+        viewModelScope.launch { com.example.network.OnlineMatchRepository.leaveQueue() }
+    }
+
+    fun observeRealMatch(matchId: String) {
+        matchObserverJob?.cancel()
+        matchObserverJob = viewModelScope.launch {
+            com.example.network.OnlineMatchRepository.observeMatch(matchId).collect { match ->
+                if (match == null) {
+                    activeOnlineMatch = null
+                    return@collect
+                }
+                val checked = com.example.network.OnlineMatchRepository.checkAndApplyTimeout(match)
+                activeOnlineMatch = checked
+            }
+        }
+    }
+
+    fun leaveRealMatch() {
+        matchObserverJob?.cancel()
+        activeOnlineMatch = null
+        selectedOnlineSquare = null
+    }
+
+    fun resignRealMatch() {
+        val match = activeOnlineMatch ?: return
+        val uid = myUid ?: return
+        val winner = if (match.player1Uid == uid) match.player2Uid else match.player1Uid
+        viewModelScope.launch { com.example.network.OnlineMatchRepository.finishMatch(match.matchId, winner) }
+    }
+
+    /** Tap handling for the online board: select own piece, then tap a destination square. */
+    fun tapOnlineSquare(row: Int, col: Int) {
+        val match = activeOnlineMatch ?: return
+        val uid = myUid ?: return
+        if (match.status != com.example.network.MatchStatus.ACTIVE) return
+        if (match.turnUid != uid) return
+
+        val myIsRed = match.player1Uid == uid
+        val pieceHere = match.board.firstOrNull { it.row == row && it.col == col }
+
+        val selected = selectedOnlineSquare
+        if (selected == null) {
+            if (pieceHere != null && pieceHere.isRed == myIsRed) {
+                selectedOnlineSquare = Pair(row, col)
+            }
+            return
+        }
+
+        val selectedPieceObj = match.board.firstOrNull { it.row == selected.first && it.col == selected.second }
+        if (selectedPieceObj == null) {
+            selectedOnlineSquare = null
+            return
+        }
+        if (pieceHere != null && pieceHere.isRed == myIsRed) {
+            // Reselect a different own piece
+            selectedOnlineSquare = Pair(row, col)
+            return
+        }
+
+        val (legalMoves, legalJumps) = onlineMovesAndJumps(selectedPieceObj, match.board)
+        val isJump = legalJumps.contains(Pair(row, col))
+        val isMove = legalMoves.contains(Pair(row, col))
+        if (!isJump && !isMove) {
+            selectedOnlineSquare = null
+            return
+        }
+
+        val newBoard = applyOnlineMove(selectedPieceObj, row, col, match.board, isJump)
+        selectedOnlineSquare = null
+
+        // Same mandatory chain-capture logic as offline play
+        val movedPiece = newBoard.firstOrNull { it.id == selectedPieceObj.id }
+        val opponentUid = if (myIsRed) match.player2Uid else match.player1Uid
+        var nextTurnUid = opponentUid
+        if (isJump && movedPiece != null) {
+            val (_, chainJumps) = onlineMovesAndJumps(movedPiece, newBoard)
+            if (chainJumps.isNotEmpty()) {
+                nextTurnUid = uid // same player continues
+                selectedOnlineSquare = Pair(movedPiece.row, movedPiece.col)
+            }
+        }
+
+        viewModelScope.launch {
+            com.example.network.OnlineMatchRepository.pushMove(match.matchId, newBoard, nextTurnUid)
+            val remainingOpp = newBoard.any { it.isRed != myIsRed }
+            val remainingMine = newBoard.any { it.isRed == myIsRed }
+            if (!remainingOpp) {
+                com.example.network.OnlineMatchRepository.finishMatch(match.matchId, uid)
+            } else if (!remainingMine) {
+                com.example.network.OnlineMatchRepository.finishMatch(match.matchId, opponentUid)
+            }
+        }
+    }
+
+    /** Minimal rules engine mirror for the plain (no hero/HP layer) online board. */
+    private fun onlineMovesAndJumps(piece: com.example.network.OnlineBoardPiece, board: List<com.example.network.OnlineBoardPiece>): Pair<List<Pair<Int, Int>>, List<Pair<Int, Int>>> {
+        val size = ruleSystem.boardSize
+        val flying = ruleFlyingKings && piece.isKing
+        val dirs = listOf(Pair(-1, -1), Pair(-1, 1), Pair(1, -1), Pair(1, 1))
+        val moves = mutableListOf<Pair<Int, Int>>()
+        val jumps = mutableListOf<Pair<Int, Int>>()
+        if (flying) {
+            for (dir in dirs) {
+                var step = 1
+                var capturedPos: Pair<Int, Int>? = null
+                while (true) {
+                    val r = piece.row + dir.first * step
+                    val c = piece.col + dir.second * step
+                    if (r !in 0 until size || c !in 0 until size) break
+                    val occ = board.firstOrNull { it.row == r && it.col == c }
+                    if (occ == null) {
+                        if (capturedPos != null) jumps.add(Pair(r, c)) else moves.add(Pair(r, c))
+                    } else if (occ.isRed == piece.isRed) break
+                    else {
+                        if (capturedPos != null) break
+                        capturedPos = Pair(r, c)
+                    }
+                    step++
+                }
+            }
+        } else {
+            val moveDirs = if (piece.isKing) dirs else if (piece.isRed) listOf(Pair(-1, -1), Pair(-1, 1)) else listOf(Pair(1, -1), Pair(1, 1))
+            for (dir in moveDirs) {
+                val r = piece.row + dir.first
+                val c = piece.col + dir.second
+                if (r in 0 until size && c in 0 until size && board.none { it.row == r && it.col == c }) moves.add(Pair(r, c))
+            }
+            for (dir in dirs) {
+                val r1 = piece.row + dir.first; val c1 = piece.col + dir.second
+                val r2 = piece.row + dir.first * 2; val c2 = piece.col + dir.second * 2
+                if (r2 in 0 until size && c2 in 0 until size) {
+                    val mid = board.firstOrNull { it.row == r1 && it.col == c1 }
+                    val land = board.firstOrNull { it.row == r2 && it.col == c2 }
+                    if (mid != null && mid.isRed != piece.isRed && land == null) jumps.add(Pair(r2, c2))
+                }
+            }
+        }
+        // Forced jumps: if ANY of this player's pieces has a jump, non-jump moves are illegal for all of them
+        val anyJumpForColor = board.filter { it.isRed == piece.isRed }.any { p ->
+            if (p.id == piece.id) jumps.isNotEmpty() else onlineMovesAndJumpsRaw(p, board).second.isNotEmpty()
+        }
+        return if (anyJumpForColor) Pair(emptyList(), jumps) else Pair(moves, jumps)
+    }
+
+    private fun onlineMovesAndJumpsRaw(piece: com.example.network.OnlineBoardPiece, board: List<com.example.network.OnlineBoardPiece>): Pair<List<Pair<Int, Int>>, List<Pair<Int, Int>>> {
+        // Avoids infinite recursion with onlineMovesAndJumps' forced-jump check above
+        val size = ruleSystem.boardSize
+        val dirs = listOf(Pair(-1, -1), Pair(-1, 1), Pair(1, -1), Pair(1, 1))
+        val jumps = mutableListOf<Pair<Int, Int>>()
+        if (ruleFlyingKings && piece.isKing) {
+            for (dir in dirs) {
+                var step = 1
+                var capturedPos: Pair<Int, Int>? = null
+                while (true) {
+                    val r = piece.row + dir.first * step; val c = piece.col + dir.second * step
+                    if (r !in 0 until size || c !in 0 until size) break
+                    val occ = board.firstOrNull { it.row == r && it.col == c }
+                    if (occ == null) { if (capturedPos != null) jumps.add(Pair(r, c)) }
+                    else if (occ.isRed == piece.isRed) break
+                    else { if (capturedPos != null) break; capturedPos = Pair(r, c) }
+                    step++
+                }
+            }
+        } else {
+            for (dir in dirs) {
+                val r1 = piece.row + dir.first; val c1 = piece.col + dir.second
+                val r2 = piece.row + dir.first * 2; val c2 = piece.col + dir.second * 2
+                if (r2 in 0 until size && c2 in 0 until size) {
+                    val mid = board.firstOrNull { it.row == r1 && it.col == c1 }
+                    val land = board.firstOrNull { it.row == r2 && it.col == c2 }
+                    if (mid != null && mid.isRed != piece.isRed && land == null) jumps.add(Pair(r2, c2))
+                }
+            }
+        }
+        return Pair(emptyList(), jumps)
+    }
+
+    private fun applyOnlineMove(piece: com.example.network.OnlineBoardPiece, toRow: Int, toCol: Int, board: List<com.example.network.OnlineBoardPiece>, isJump: Boolean): List<com.example.network.OnlineBoardPiece> {
+        val becomesKing = piece.isKing || (piece.isRed && toRow == 0) || (!piece.isRed && toRow == ruleSystem.boardSize - 1)
+        val moved = piece.copy(row = toRow, col = toCol, isKing = becomesKing)
+        var newBoard = board.filterNot { it.id == piece.id }
+        if (isJump) {
+            val rowStep = if (toRow > piece.row) 1 else -1
+            val colStep = if (toCol > piece.col) 1 else -1
+            var r = piece.row + rowStep; var c = piece.col + colStep
+            var capId: String? = null
+            while (r != toRow) {
+                newBoard.firstOrNull { it.row == r && it.col == c }?.let { capId = it.id }
+                r += rowStep; c += colStep
+            }
+            newBoard = newBoard.filterNot { it.id == capId }
+        }
+        return newBoard + moved
+    }
+
+    // --- REAL TOURNAMENTS / COMPETITIONS ---
+    var openTournaments by mutableStateOf<List<com.example.network.TournamentInfo>>(emptyList())
+    var currentTournament by mutableStateOf<com.example.network.TournamentInfo?>(null)
+    var currentFixtures by mutableStateOf<List<com.example.network.TournamentFixture>>(emptyList())
+    var isCreateTournamentDialogOpen by mutableStateOf(false)
+
+    fun loadOpenTournaments() {
+        viewModelScope.launch {
+            com.example.network.TournamentRepository.observeOpenTournaments().collect { openTournaments = it }
+        }
+    }
+
+    fun createTournament(name: String, format: String, startsAt: Long) {
+        val organizerName = playerState.value?.playerName ?: "Organizer"
+        viewModelScope.launch {
+            val result = com.example.network.TournamentRepository.createTournament(name, format, ruleSystem.name, organizerName, startsAt)
+            result.onSuccess { id -> openTournament(id) }
+            result.onFailure { triggerNotification(it.message ?: "Couldn't create tournament.") }
+        }
+    }
+
+    fun openTournament(tournamentId: String) {
+        viewModelScope.launch {
+            com.example.network.TournamentRepository.observeTournament(tournamentId).collect { currentTournament = it }
+        }
+        viewModelScope.launch {
+            com.example.network.TournamentRepository.observeFixtures(tournamentId).collect { currentFixtures = it }
+        }
+    }
+
+    fun registerForTournament() {
+        val t = currentTournament ?: return
+        val name = playerState.value?.playerName ?: "Player"
+        viewModelScope.launch {
+            val result = com.example.network.TournamentRepository.register(t.tournamentId, name)
+            result.onFailure { triggerNotification(it.message ?: "Couldn't register.") }
+        }
+    }
+
+    fun startTournament() {
+        val t = currentTournament ?: return
+        viewModelScope.launch {
+            val result = com.example.network.TournamentRepository.generateFixturesAndStart(t)
+            result.onFailure { triggerNotification(it.message ?: "Couldn't start tournament.") }
+        }
+    }
+
+    fun startFixture(fixture: com.example.network.TournamentFixture) {
+        viewModelScope.launch {
+            val result = com.example.network.TournamentRepository.startFixtureMatch(fixture, ruleSystem.name)
+            result.onSuccess { matchId -> observeRealMatch(matchId) }
+            result.onFailure { triggerNotification(it.message ?: "Couldn't start match.") }
+        }
+    }
+
+    /** Call when a competition fixture's match finishes, to record the result and advance the bracket if needed. */
+    fun completeFixtureIfNeeded(match: com.example.network.OnlineMatch) {
+        val fixtureId = match.fixtureId ?: return
+        val winner = match.winnerUid ?: return
+        viewModelScope.launch {
+            com.example.network.TournamentRepository.completeFixture(fixtureId, winner)
+            val t = currentTournament
+            if (t != null && t.format == com.example.network.TournamentFormat.BRACKET) {
+                val round = currentFixtures.firstOrNull { it.fixtureId == fixtureId }?.round ?: return@launch
+                com.example.network.TournamentRepository.advanceBracketRound(t.tournamentId, round)
+            }
+        }
+    }
+
     // --- IN-APP PURCHASES (IAP) ---
     var showIapModal by mutableStateOf(false)
     var selectedIapPackageName by mutableStateOf("")
     var selectedIapPackageCost by mutableStateOf("")
     var iapPurchaseSuccessMessage by mutableStateOf<String?>(null)
-
-    // --- ADMIN REMOTE CONTROL PANEL ---
-    // No UI currently opens this (there's no button that sets it true) — it's dead code today.
-    // If you ever wire a trigger to it, gate that trigger behind BuildConfig.DEBUG so it's
-    // physically impossible to reach in a release APK. A client-side boolean like this is not
-    // real access control: anyone who finds the trigger gets free currency and combat cheats.
-    // Real admin tooling belongs server-side (e.g. a Firestore doc only your backend/Cloud
-    // Function writes to), never as a switch inside the app itself.
-    private var _isAdminPanelVisible by mutableStateOf(false)
-    var isAdminPanelVisible: Boolean
-        get() = _isAdminPanelVisible
-        set(value) { _isAdminPanelVisible = value && com.example.BuildConfig.DEBUG }
-    var adminCoinGrantAmount by mutableStateOf("500")
-    var adminCustomBotDifficulty by mutableStateOf("Medium")
-    var adminGlobalModifier by mutableStateOf("None") // None, Double XP, Midas Touch, One Hit KO
 
     // Notification HUD Banner helper
     var activeNotificationBanner by mutableStateOf<String?>(null)
@@ -1440,7 +1451,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         if (!redRemaining) {
             winnerMessage = "SHADOW CLAN VICTORIOUS!"
             SoundManager.playSfx(SoundManager.Sfx.DEFEAT)
-            checkAndApplyTournamentMatchEnd()
             if (!isRealHumanOpponent) {
                 viewModelScope.launch { LeaderboardRepository.reportBotMatchResult(currentBotPersona.name, currentBotPersona.baseMmr, botWon = true) }
             }
@@ -1449,7 +1459,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         if (!blackRemaining) {
             winnerMessage = "VANGUARD ORDER VICTORIOUS!"
             SoundManager.playSfx(SoundManager.Sfx.VICTORY_FANFARE)
-            checkAndApplyTournamentMatchEnd()
             if (!isRealHumanOpponent) {
                 viewModelScope.launch { LeaderboardRepository.reportBotMatchResult(currentBotPersona.name, currentBotPersona.baseMmr, botWon = false) }
             }
@@ -1479,9 +1488,9 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     // tuned per difficulty so Easy genuinely plays like a beginner and Hard genuinely fights back.
     // ---------------------------------------------------------------------------------
     enum class BotDifficulty(val searchDepth: Int, val mistakeChance: Double) {
-        EASY(1, 0.40),
-        MEDIUM(3, 0.15),
-        HARD(4, 0.03)
+        EASY(2, 0.40),
+        MEDIUM(4, 0.15),
+        HARD(6, 0.03)
     }
 
     data class BotPersona(val name: String, val difficulty: BotDifficulty, val baseMmr: Int)
@@ -1610,10 +1619,54 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         for (p in board) {
             val pieceValue = if (p.isKing) 3.0 else 1.0
             val advancement = if (p.isRed) (ruleSystem.boardSize - 1 - p.row) else p.row
-            val v = pieceValue + advancement * 0.02
+            var v = pieceValue + advancement * 0.02
+
+            // Explicit safety term: is this piece currently capturable, and if so, is it at
+            // least a fair (or good) trade for whoever captures it? Minimax finds this anyway
+            // given enough depth, but scoring it directly means the engine reasons about "is
+            // this piece hanging" as its own concept rather than only discovering it by chance
+            // within the search horizon — matters most right at the edge of the search depth.
+            val threats = findCapturingThreats(p, board)
+            if (threats.isNotEmpty()) {
+                val worstThreatValue = threats.maxOf { if (it.isKing) 3.0 else 1.0 }
+                val isDefended = pieceHasDefender(p, board)
+                v -= if (isDefended) worstThreatValue * 0.35 else worstThreatValue * 0.9
+            }
+
             score += if (p.isRed == forRed) v else -v
         }
         return score
+    }
+
+    /** Which enemy pieces could capture this one right now, on their next turn. */
+    private fun findCapturingThreats(target: SimPiece, board: List<SimPiece>): List<SimPiece> {
+        return board.filter { it.isRed != target.isRed }.filter { attacker ->
+            simMovesAndJumps(attacker, board).second.any { (jr, jc) ->
+                // A jump lands 2+ squares away with the target piece on the line it crossed —
+                // cheap correct-enough check: does this attacker have ANY jump that removes a
+                // piece at target's exact square along the way?
+                val rowStep = if (jr > attacker.row) 1 else if (jr < attacker.row) -1 else 0
+                val colStep = if (jc > attacker.col) 1 else if (jc < attacker.col) -1 else 0
+                var r = attacker.row + rowStep
+                var c = attacker.col + colStep
+                var found = false
+                while (r != jr || c != jc) {
+                    if (r == target.row && c == target.col) { found = true; break }
+                    r += rowStep; c += colStep
+                }
+                found
+            }
+        }
+    }
+
+    /** Does this piece have a friendly piece positioned to immediately recapture on that square? */
+    private fun pieceHasDefender(target: SimPiece, board: List<SimPiece>): Boolean {
+        val dirs = listOf(Pair(-1, -1), Pair(-1, 1), Pair(1, -1), Pair(1, 1))
+        return dirs.any { dir ->
+            val r = target.row + dir.first
+            val c = target.col + dir.second
+            board.any { it.row == r && it.col == c && it.isRed == target.isRed }
+        }
     }
 
     private fun minimax(board: List<SimPiece>, depth: Int, isRedTurn: Boolean, forRed: Boolean, alphaIn: Double, betaIn: Double): Double {
@@ -1633,9 +1686,21 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         val candidates = if (jumpCandidates.isNotEmpty()) jumpCandidates else moveCandidates
         if (candidates.isEmpty()) return if (isRedTurn == forRed) -1000.0 else 1000.0
 
+        // Move ordering: alpha-beta only prunes well if strong moves are tried first. Rank each
+        // candidate by a cheap 1-ply static eval before recursing, so the search tends to explore
+        // the most promising line first — this is what makes depth 6 actually finish quickly
+        // instead of exploring the tree almost blind.
         val maximizing = isRedTurn == forRed
+        val orderedCandidates = candidates
+            .map { cand ->
+                val resultBoard = resolveFullTurn(cand.first, cand.second, cand.third, board, jumpCandidates.isNotEmpty())
+                cand to evaluateBoard(resultBoard, forRed)
+            }
+            .sortedByDescending { if (maximizing) it.second else -it.second }
+            .map { it.first }
+
         var best = if (maximizing) Double.NEGATIVE_INFINITY else Double.POSITIVE_INFINITY
-        for ((piece, toR, toC) in candidates) {
+        for ((piece, toR, toC) in orderedCandidates) {
             val resultBoard = resolveFullTurn(piece, toR, toC, board, jumpCandidates.isNotEmpty())
             val score = minimax(resultBoard, depth - 1, !isRedTurn, forRed, alpha, beta)
             if (maximizing) {
@@ -1681,12 +1746,22 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
         val simBoard = boardPieces.map { SimPiece(it.row, it.col, it.isRed, it.isKing) }
         val isJump = candidateJumps.isNotEmpty()
+        // Flying kings on a 10x10 board can have a much larger branching factor per move than an
+        // 8x8 non-flying board. Scale the depth down when there are still many pieces on the
+        // board (early/mid-game) so a "Hard" search doesn't turn into a multi-second pause —
+        // by the endgame, when this matters most for precise play, piece count is naturally low
+        // and the full requested depth applies.
+        val effectiveDepth = when {
+            boardPieces.size > 24 -> (difficulty.searchDepth - 2).coerceAtLeast(1)
+            boardPieces.size > 14 -> (difficulty.searchDepth - 1).coerceAtLeast(1)
+            else -> difficulty.searchDepth
+        }
         var bestScore = Double.NEGATIVE_INFINITY
         val bestMoves = mutableListOf<Triple<BoardPiece, Int, Int>>()
         for ((piece, toR, toC) in candidates) {
             val simPiece = SimPiece(piece.row, piece.col, piece.isRed, piece.isKing)
             val resultBoard = resolveFullTurn(simPiece, toR, toC, simBoard, isJump)
-            val score = minimax(resultBoard, (difficulty.searchDepth - 1).coerceAtLeast(0), true, false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)
+            val score = minimax(resultBoard, (effectiveDepth - 1).coerceAtLeast(0), true, false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)
             when {
                 score > bestScore -> {
                     bestScore = score
@@ -1713,7 +1788,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 // No available moves, bot surrenders/passes
                 winnerMessage = "VANGUARD ORDER VICTORIOUS! (Shadow trapped)"
                 SoundManager.playSfx(SoundManager.Sfx.VICTORY_FANFARE)
-                checkAndApplyTournamentMatchEnd()
                 return@launch
             }
 
@@ -2133,49 +2207,6 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
-    // Admin remote remote backend control panel actions
-    fun adminGrantCoins(amount: Int) {
-        viewModelScope.launch {
-            val state = playerState.value ?: return@launch
-            val updatedState = state.copy(draughtCoins = (state.draughtCoins + amount).coerceAtLeast(0))
-            repository.updatePlayerState(updatedState)
-            
-            repository.mineNewBlock(
-                transactions = "[ADMIN OVERRIDE] Remotely granted $amount BLC to Daniel Mukasa",
-                costCoins = 0,
-                earnCoins = if (amount > 0) amount else 0
-            )
-            triggerNotification("Admin remote override: Balance set to ${updatedState.draughtCoins} BLC!")
-        }
-    }
-
-    fun adminApplyModifier(modifier: String) {
-        adminGlobalModifier = modifier
-        viewModelScope.launch {
-            when (modifier) {
-                "One Hit KO Mode" -> {
-                    // Temporarily set all Vanguard piece attacks exceptionally high
-                    boardPieces = boardPieces.map {
-                        if (it.isRed) it.copy(atk = 999) else it
-                    }
-                    triggerNotification("Admin Override: ONE HIT KO mode activated! Vanguard Atk set to 999.")
-                }
-                "1 HP Sudden Death" -> {
-                    boardPieces = boardPieces.map {
-                        it.copy(hp = 1, maxHp = 1)
-                    }
-                    triggerNotification("Admin Override: SUDDEN DEATH! All pieces set to 1 HP.")
-                }
-                "Midas Touch (Double BLC)" -> {
-                    triggerNotification("Admin Override: Midas Touch activated! Match rewards doubled.")
-                }
-                else -> {
-                    resetGame()
-                    triggerNotification("Admin Override: Reset board to default parameters.")
-                }
-            }
-        }
-    }
 }
 
 // Simple Factory for creating ViewModel with Repository dependency
