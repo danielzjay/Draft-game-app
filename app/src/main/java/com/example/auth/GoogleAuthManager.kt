@@ -33,6 +33,16 @@ object GoogleAuthManager {
     private const val WEB_CLIENT_ID =
         "861274979266-fji7kfo11r23ihjhlq5blsh2903lvuj3.apps.googleusercontent.com"
 
+    suspend fun signInAnonymously(): Result<FirebaseUser> {
+        return try {
+            val authResult = FirebaseAuth.getInstance().signInAnonymously().await()
+            val user = authResult.user ?: return Result.failure(Exception("Anonymous sign-in succeeded but no user was returned"))
+            Result.success(user)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun signIn(context: Context): Result<FirebaseUser> {
         return try {
             val credentialManager = CredentialManager.create(context)

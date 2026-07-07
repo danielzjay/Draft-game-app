@@ -292,486 +292,640 @@ fun BattleScreen(viewModel: GameViewModel) {
     val activeSkin = state?.selectedSkin ?: "classic"
     val activeBoardStyle = state?.selectedBoardStyle ?: "classic"
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState() /* Let it fit in standard size screens */)
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        // Battle Arena Info Block
-        var showGameModeMenu by remember { mutableStateOf(false) }
+    val isOnlineMode = viewModel.selectedGameMode == GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING ||
+            viewModel.selectedGameMode == GameViewModel.SelectedGameMode.COMPETITION_LEAGUE ||
+            viewModel.selectedGameMode == GameViewModel.SelectedGameMode.COMPETITION_LADDER
 
-        Card(
-            colors = CardDefaults.cardColors(containerColor = DarkSurface),
-            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+    if (isOnlineMode) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Icon(
-                            imageVector = when (viewModel.selectedGameMode) {
-                                GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> Icons.Default.SportsEsports
-                                GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> Icons.Default.Android
-                                GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> Icons.Default.CloudQueue
-                                GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> Icons.Default.Group
-                                GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> Icons.Default.EmojiEvents
-                                GameViewModel.SelectedGameMode.COMPETITION_LADDER -> Icons.Default.MilitaryTech
-                            },
-                            contentDescription = "Active Battle Mode",
-                            tint = if (viewModel.isOnlineMode) Color(0xFF00E676) else RedCrimson,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = when (viewModel.selectedGameMode) {
-                                GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "🎮 LOCAL: PASS & PLAY"
-                                GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "🤖 OFFLINE: VS BOT"
-                                GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "🌐 ONLINE: VS CLOUD BOT"
-                                GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "⚔️ ONLINE: VS PLAYERS"
-                                GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "🏆 COMP: VANGUARD LEAGUE"
-                                GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "🪜 COMP: GLADIATOR LADDER"
-                            },
-                            color = TextWhite,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+            // Battle Arena Info Block
+            var showGameModeMenu by remember { mutableStateOf(false) }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Button(
-                            onClick = { viewModel.isRulesDialogOpen = true },
-                            colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.height(28.dp).testTag("rules_help_button")
-                        ) {
-                            Icon(Icons.Default.Help, contentDescription = "Rules", tint = AmberGold, modifier = Modifier.size(12.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = when (viewModel.selectedGameMode) {
+                                    GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> Icons.Default.SportsEsports
+                                    GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> Icons.Default.Android
+                                    GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> Icons.Default.CloudQueue
+                                    GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> Icons.Default.Group
+                                    GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> Icons.Default.EmojiEvents
+                                    GameViewModel.SelectedGameMode.COMPETITION_LADDER -> Icons.Default.MilitaryTech
+                                },
+                                contentDescription = "Active Battle Mode",
+                                tint = if (viewModel.isOnlineMode) Color(0xFF00E676) else RedCrimson,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "Rules",
-                                color = AmberGold,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
+                                text = when (viewModel.selectedGameMode) {
+                                    GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "🎮 LOCAL: PASS & PLAY"
+                                    GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "🤖 OFFLINE: VS BOT"
+                                    GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "🌐 ONLINE: VS CLOUD BOT"
+                                    GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "⚔️ ONLINE: VS PLAYERS"
+                                    GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "🏆 COMP: VANGUARD LEAGUE"
+                                    GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "🪜 COMP: GLADIATOR LADDER"
+                                },
+                                color = TextWhite,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        Box {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                             Button(
-                                onClick = { showGameModeMenu = true },
+                                onClick = { viewModel.isRulesDialogOpen = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
                                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier = Modifier.height(28.dp).testTag("switch_mode_button")
+                                modifier = Modifier.height(28.dp).testTag("rules_help_button")
                             ) {
+                                Icon(Icons.Default.Help, contentDescription = "Rules", tint = AmberGold, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
                                 Text(
-                                    text = "Switch Mode",
+                                    text = "Rules",
                                     color = AmberGold,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AmberGold, modifier = Modifier.size(12.dp))
                             }
 
-                            DropdownMenu(
-                                expanded = showGameModeMenu,
-                                onDismissRequest = { showGameModeMenu = false },
-                                modifier = Modifier.background(DarkSurface).border(1.dp, Color(0x33FFFFFF))
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("🎮 Local Pass & Play", color = TextWhite, fontSize = 11.sp) },
-                                    onClick = {
-                                        viewModel.changeGameMode(GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY)
-                                        showGameModeMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("🤖 Offline VS Bot AI", color = TextWhite, fontSize = 11.sp) },
-                                    onClick = {
-                                        viewModel.changeGameMode(GameViewModel.SelectedGameMode.OFFLINE_VS_BOT)
-                                        showGameModeMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("🌐 Online VS Cloud Bot", color = TextWhite, fontSize = 11.sp) },
-                                    onClick = {
-                                        viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_VS_BOT)
-                                        showGameModeMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("⚔️ Online VS Players", color = TextWhite, fontSize = 11.sp) },
-                                    onClick = {
-                                        viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING)
-                                        showGameModeMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("⚽ Vanguard League (Football style)", color = TextWhite, fontSize = 11.sp) },
-                                    onClick = {
-                                        viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITION_LEAGUE)
-                                        showGameModeMenu = false
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("🪜 Gladiator Ladder Bracket", color = TextWhite, fontSize = 11.sp) },
-                                    onClick = {
-                                        viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITION_LADDER)
-                                        showGameModeMenu = false
-                                    }
-                                )
+                            Box {
+                                Button(
+                                    onClick = { showGameModeMenu = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp).testTag("switch_mode_button")
+                                ) {
+                                    Text(
+                                        text = "Switch Mode",
+                                        color = AmberGold,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AmberGold, modifier = Modifier.size(12.dp))
+                                }
+
+                                DropdownMenu(
+                                    expanded = showGameModeMenu,
+                                    onDismissRequest = { showGameModeMenu = false },
+                                    modifier = Modifier.background(DarkSurface).border(1.dp, Color(0x33FFFFFF))
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("🎮 Local Pass & Play", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("🤖 Offline VS Bot AI", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.OFFLINE_VS_BOT)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("🌐 Online VS Cloud Bot", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_VS_BOT)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("⚔️ Online VS Players", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("⚽ Vanguard League (Football style)", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITION_LEAGUE)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("🪜 Gladiator Ladder Bracket", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITION_LADDER)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = when (viewModel.selectedGameMode) {
+                            GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "Play with a friend locally on the same device. No account link required."
+                            GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "Battle the local dark core bot offline for casual training."
+                            GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "Practice against an AI opponent (not a real person) with online-style presentation."
+                            GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "Real matchmaking — get paired with another real signed-in player."
+                            GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "Real round-robin leagues, organized by real players. Register, then play your fixture schedule."
+                            GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "Real single-elimination brackets, organized by real players."
+                        },
+                        color = TextGray,
+                        fontSize = 10.sp,
+                        lineHeight = 13.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                 }
+            }
 
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                Text(
-                    text = when (viewModel.selectedGameMode) {
-                        GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "Play with a friend locally on the same device. No account link required."
-                        GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "Battle the local dark core bot offline for casual training."
-                        GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "Practice against an AI opponent (not a real person) with online-style presentation."
-                        GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "Real matchmaking — get paired with another real signed-in player."
-                        GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "Real round-robin leagues, organized by real players. Register, then play your fixture schedule."
-                        GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "Real single-elimination brackets, organized by real players."
-                    },
-                    color = TextGray,
-                    fontSize = 10.sp,
-                    lineHeight = 13.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                // These three modes now have real implementations (Firestore-backed matchmaking
-                // and tournaments — see OnlineScreens.kt) — hand off to them here, which skips
-                // past the old fake competition panels and local board below entirely for these
-                // modes. Those old panels are unreachable now rather than deleted outright, to
-                // keep this change smaller and lower-risk; safe to remove in a later cleanup pass.
-                when (viewModel.selectedGameMode) {
-                    GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> {
-                        com.example.ui.screens.RealOnlineMatchScreen(viewModel)
-                        return@Column
-                    }
-                    GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> {
-                        com.example.ui.screens.TournamentBrowserScreen(viewModel, com.example.network.TournamentFormat.LEAGUE)
-                        return@Column
-                    }
-                    GameViewModel.SelectedGameMode.COMPETITION_LADDER -> {
-                        com.example.ui.screens.TournamentBrowserScreen(viewModel, com.example.network.TournamentFormat.BRACKET)
-                        return@Column
-                    }
-                    else -> {}
+            when (viewModel.selectedGameMode) {
+                GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> {
+                    com.example.ui.screens.RealOnlineMatchScreen(viewModel)
                 }
-
+                GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> {
+                    com.example.ui.screens.TournamentBrowserScreen(viewModel, com.example.network.TournamentFormat.LEAGUE)
+                }
+                GameViewModel.SelectedGameMode.COMPETITION_LADDER -> {
+                    com.example.ui.screens.TournamentBrowserScreen(viewModel, com.example.network.TournamentFormat.BRACKET)
+                }
+                else -> {}
             }
         }
-
-        // Eaten Shadow Pieces (Shadow's Graveyard / Purple casualties)
-        CapturedPiecesRow(
-            title = "Shadow Graveyard",
-            pieces = viewModel.capturedPieces.filter { !it.isRed },
-            allianceColor = VioletNeon,
-            tag = "shadow_graveyard"
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // The checkers board
-        CheckersBoardComponent(viewModel, activeSkin, activeBoardStyle)
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        // Eaten Vanguard Pieces (Vanguard's Graveyard / Red casualties)
-        CapturedPiecesRow(
-            title = "Vanguard Graveyard",
-            pieces = viewModel.capturedPieces.filter { it.isRed },
-            allianceColor = RedCrimson,
-            tag = "vanguard_graveyard"
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Selected Piece Details HUD
-        AnimatedVisibility(
-            visible = viewModel.selectedPiece != null,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState() /* Let it fit in standard size screens */)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            viewModel.selectedPiece?.let { piece ->
+            // Battle Arena Info Block
+            var showGameModeMenu by remember { mutableStateOf(false) }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Icon(
+                                imageVector = when (viewModel.selectedGameMode) {
+                                    GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> Icons.Default.SportsEsports
+                                    GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> Icons.Default.Android
+                                    GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> Icons.Default.CloudQueue
+                                    GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> Icons.Default.Group
+                                    GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> Icons.Default.EmojiEvents
+                                    GameViewModel.SelectedGameMode.COMPETITION_LADDER -> Icons.Default.MilitaryTech
+                                },
+                                contentDescription = "Active Battle Mode",
+                                tint = if (viewModel.isOnlineMode) Color(0xFF00E676) else RedCrimson,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = when (viewModel.selectedGameMode) {
+                                    GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "🎮 LOCAL: PASS & PLAY"
+                                    GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "🤖 OFFLINE: VS BOT"
+                                    GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "🌐 ONLINE: VS CLOUD BOT"
+                                    GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "⚔️ ONLINE: VS PLAYERS"
+                                    GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "🏆 COMP: VANGUARD LEAGUE"
+                                    GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "🪜 COMP: GLADIATOR LADDER"
+                                },
+                                color = TextWhite,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Button(
+                                onClick = { viewModel.isRulesDialogOpen = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp).testTag("rules_help_button")
+                            ) {
+                                Icon(Icons.Default.Help, contentDescription = "Rules", tint = AmberGold, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Rules",
+                                    color = AmberGold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Box {
+                                Button(
+                                    onClick = { showGameModeMenu = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp).testTag("switch_mode_button")
+                                ) {
+                                    Text(
+                                        text = "Switch Mode",
+                                        color = AmberGold,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AmberGold, modifier = Modifier.size(12.dp))
+                                }
+
+                                DropdownMenu(
+                                    expanded = showGameModeMenu,
+                                    onDismissRequest = { showGameModeMenu = false },
+                                    modifier = Modifier.background(DarkSurface).border(1.dp, Color(0x33FFFFFF))
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("🎮 Local Pass & Play", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("🤖 Offline VS Bot AI", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.OFFLINE_VS_BOT)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("🌐 Online VS Cloud Bot", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_VS_BOT)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("⚔️ Online VS Players", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("⚽ Vanguard League (Football style)", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITION_LEAGUE)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("🪜 Gladiator Ladder Bracket", color = TextWhite, fontSize = 11.sp) },
+                                        onClick = {
+                                            viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITION_LADDER)
+                                            showGameModeMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = when (viewModel.selectedGameMode) {
+                            GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "Play with a friend locally on the same device. No account link required."
+                            GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "Battle the local dark core bot offline for casual training."
+                            GameViewModel.SelectedGameMode.ONLINE_VS_BOT -> "Practice against an AI opponent (not a real person) with online-style presentation."
+                            GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "Real matchmaking — get paired with another real signed-in player."
+                            GameViewModel.SelectedGameMode.COMPETITION_LEAGUE -> "Real round-robin leagues, organized by real players. Register, then play your fixture schedule."
+                            GameViewModel.SelectedGameMode.COMPETITION_LADDER -> "Real single-elimination brackets, organized by real players."
+                        },
+                        color = TextGray,
+                        fontSize = 10.sp,
+                        lineHeight = 13.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+            }
+
+            // Eaten Shadow Pieces (Shadow's Graveyard / Purple casualties)
+            CapturedPiecesRow(
+                title = "Shadow Graveyard",
+                pieces = viewModel.capturedPieces.filter { !it.isRed },
+                allianceColor = VioletNeon,
+                tag = "shadow_graveyard"
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // The checkers board
+            CheckersBoardComponent(viewModel, activeSkin, activeBoardStyle)
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Eaten Vanguard Pieces (Vanguard's Graveyard / Red casualties)
+            CapturedPiecesRow(
+                title = "Vanguard Graveyard",
+                pieces = viewModel.capturedPieces.filter { it.isRed },
+                allianceColor = RedCrimson,
+                tag = "vanguard_graveyard"
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Selected Piece Details HUD
+            AnimatedVisibility(
+                visible = viewModel.selectedPiece != null,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                viewModel.selectedPiece?.let { piece ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        border = BorderStroke(1.dp, if (piece.isRed) RedCrimson.copy(alpha = 0.5f) else VioletNeon.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(DarkSurfaceVariant)
+                                            .padding(4.dp)
+                                    ) {
+                                        HeroDrawing(heroId = piece.heroId, isRed = piece.isRed)
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = piece.name,
+                                            color = TextWhite,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            text = "Lv ${piece.level} ${piece.heroClass}${if (piece.isKing) " (PROMOTED CROWN HERO)" else ""}",
+                                            color = if (piece.isRed) AmberGold else VioletNeon,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+
+                                // HP gauge
+                                Column(horizontalAlignment = Alignment.End) {
+                                    Text(
+                                        text = "HP: ${piece.hp}/${piece.maxHp}",
+                                        color = HealthGreen,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace
+                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .width(70.dp)
+                                            .height(6.dp)
+                                            .background(Color.DarkGray, RoundedCornerShape(3.dp))
+                                    ) {
+                                        val percent = (piece.hp.toFloat() / piece.maxHp).coerceIn(0f, 1f)
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxHeight()
+                                                .fillMaxWidth(percent)
+                                                .background(HealthGreen, RoundedCornerShape(3.dp))
+                                        )
+                                    }
+                                }
+                            }
+
+                            Divider(color = Color(0x11FFFFFF), modifier = Modifier.padding(vertical = 8.dp))
+
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.FlashOn, contentDescription = "ATK", tint = RedCrimson, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("ATK: ${piece.atk}", color = TextWhite, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Shield, contentDescription = "DEF", tint = Color(0xFF29B6F6), modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("DEF: ${piece.def}", color = TextWhite, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.AutoAwesome, contentDescription = "Ability", tint = AmberGold, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(piece.abilityName, color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = piece.abilityDescription,
+                                color = TextGray,
+                                fontSize = 11.sp,
+                                style = androidx.compose.ui.text.TextStyle(lineHeight = 14.sp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Action controls
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = { viewModel.resetGame() },
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f).testTag("reset_board_button")
+                ) {
+                    Icon(Icons.Default.RestartAlt, contentDescription = "Reset", modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reset Board", fontSize = 12.sp)
+                }
+
+                Button(
+                    onClick = { viewModel.currentTab = GameTab.HEROES },
+                    colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Upgrade, contentDescription = "Upgrade Heroes", modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Upgrade Heroes", fontSize = 12.sp)
+                }
+            }
+
+            // Victory banner
+            viewModel.winnerMessage?.let { winnerMsg ->
+                Spacer(modifier = Modifier.height(12.dp))
                 Card(
                     colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                    border = BorderStroke(1.dp, if (piece.isRed) RedCrimson.copy(alpha = 0.5f) else VioletNeon.copy(alpha = 0.5f)),
+                    border = BorderStroke(2.dp, AmberGold),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.EmojiEvents, contentDescription = "Victory Trophy", tint = AmberGold, modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            winnerMsg,
+                            color = AmberGold,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Black,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "You've been rewarded with 75 BLC and 150 User XP!",
+                            color = TextWhite,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { viewModel.resetGame() },
+                            colors = ButtonDefaults.buttonColors(containerColor = AmberGold)
+                        ) {
+                            Text("New Match", color = DarkBg, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            if (viewModel.isOnlineMode) {
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Honest disclosure: this is an AI opponent dressed up as an "online rival," not a
+                // real networked match — there is no real-time video/voice calling here (there
+                // never was a working implementation behind it, despite what the UI used to claim).
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    border = BorderStroke(1.dp, Color(0x33FFC107)),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.SmartToy, contentDescription = null, tint = AmberGold, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Playing an AI arena rival — real cross-device multiplayer isn't built yet.",
+                            color = TextGray,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+
+
+                // Real-time Chat Console Composable
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    border = BorderStroke(1.dp, Color(0x11FFFFFF)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            "MATCH CHAT ROOM",
+                            color = AmberGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                        
+                        // Messages lazy list
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(110.dp)
+                                .background(Color.Black, RoundedCornerShape(6.dp))
+                                .padding(8.dp)
+                        ) {
+                            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                                items(viewModel.chatMessages) { msg ->
+                                    Text(
+                                        text = "${msg.first}: ${msg.second}",
+                                        color = when (msg.first) {
+                                            "You" -> AmberGold
+                                            "System" -> Color(0xFF00E676)
+                                            else -> VioletNeon
+                                        },
+                                        fontSize = 11.sp,
+                                        fontFamily = FontFamily.SansSerif,
+                                        modifier = Modifier.padding(vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Input row
+                        var chatInputText by remember { mutableStateOf("") }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(34.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(DarkSurfaceVariant)
-                                        .padding(4.dp)
-                                ) {
-                                    HeroDrawing(heroId = piece.heroId, isRed = piece.isRed)
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = piece.name,
-                                        color = TextWhite,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "Lv ${piece.level} ${piece.heroClass}${if (piece.isKing) " (PROMOTED CROWN HERO)" else ""}",
-                                        color = if (piece.isRed) AmberGold else VioletNeon,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
+                            OutlinedTextField(
+                                value = chatInputText,
+                                onValueChange = { chatInputText = it },
+                                placeholder = { Text("Send strategy taunt...", fontSize = 11.sp, color = TextMuted) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White,
+                                    focusedBorderColor = AmberGold.copy(alpha = 0.5f),
+                                    unfocusedBorderColor = Color(0x22FFFFFF),
+                                    focusedContainerColor = DarkBg,
+                                    unfocusedContainerColor = DarkBg
+                                ),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                singleLine = true
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Button(
+                                onClick = {
+                                    if (chatInputText.isNotBlank()) {
+                                        viewModel.sendChatMessage(chatInputText)
+                                        chatInputText = ""
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                                contentPadding = PaddingValues(horizontal = 10.dp),
+                                modifier = Modifier.height(42.dp)
+                            ) {
+                                Icon(Icons.Default.Send, contentDescription = "Send", tint = DarkBg, modifier = Modifier.size(14.dp))
                             }
-
-                            // HP gauge
-                            Column(horizontalAlignment = Alignment.End) {
-                                Text(
-                                    text = "HP: ${piece.hp}/${piece.maxHp}",
-                                    color = HealthGreen,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .width(70.dp)
-                                        .height(6.dp)
-                                        .background(Color.DarkGray, RoundedCornerShape(3.dp))
-                                ) {
-                                    val percent = (piece.hp.toFloat() / piece.maxHp).coerceIn(0f, 1f)
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxHeight()
-                                            .fillMaxWidth(percent)
-                                            .background(HealthGreen, RoundedCornerShape(3.dp))
-                                    )
-                                }
-                            }
-                        }
-
-                        Divider(color = Color(0x11FFFFFF), modifier = Modifier.padding(vertical = 8.dp))
-
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.FlashOn, contentDescription = "ATK", tint = RedCrimson, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("ATK: ${piece.atk}", color = TextWhite, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Shield, contentDescription = "DEF", tint = Color(0xFF29B6F6), modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("DEF: ${piece.def}", color = TextWhite, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = "Ability", tint = AmberGold, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(piece.abilityName, color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = piece.abilityDescription,
-                            color = TextGray,
-                            fontSize = 11.sp,
-                            style = androidx.compose.ui.text.TextStyle(lineHeight = 14.sp)
-                        )
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Action controls
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Button(
-                onClick = { viewModel.resetGame() },
-                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1f).testTag("reset_board_button")
-            ) {
-                Icon(Icons.Default.RestartAlt, contentDescription = "Reset", modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Reset Board", fontSize = 12.sp)
-            }
-
-            Button(
-                onClick = { viewModel.currentTab = GameTab.HEROES },
-                colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Upgrade, contentDescription = "Upgrade Heroes", modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Upgrade Heroes", fontSize = 12.sp)
-            }
-        }
-
-        // Victory banner
-        viewModel.winnerMessage?.let { winnerMsg ->
-            Spacer(modifier = Modifier.height(12.dp))
-            Card(
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = BorderStroke(2.dp, AmberGold),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.EmojiEvents, contentDescription = "Victory Trophy", tint = AmberGold, modifier = Modifier.size(48.dp))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        winnerMsg,
-                        color = AmberGold,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Black,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "You've been rewarded with 75 BLC and 150 User XP!",
-                        color = TextWhite,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { viewModel.resetGame() },
-                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold)
-                    ) {
-                        Text("New Match", color = DarkBg, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        if (viewModel.isOnlineMode) {
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Honest disclosure: this is an AI opponent dressed up as an "online rival," not a
-            // real networked match — there is no real-time video/voice calling here (there
-            // never was a working implementation behind it, despite what the UI used to claim).
-            Card(
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = BorderStroke(1.dp, Color(0x33FFC107)),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.SmartToy, contentDescription = null, tint = AmberGold, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "Playing an AI arena rival — real cross-device multiplayer isn't built yet.",
-                        color = TextGray,
-                        fontSize = 10.sp
-                    )
-                }
-            }
-
-
-            // Real-time Chat Console Composable
-            Card(
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = BorderStroke(1.dp, Color(0x11FFFFFF)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        "MATCH CHAT ROOM",
-                        color = AmberGold,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Black,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
-                    
-                    // Messages lazy list
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(110.dp)
-                            .background(Color.Black, RoundedCornerShape(6.dp))
-                            .padding(8.dp)
-                    ) {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            items(viewModel.chatMessages) { msg ->
-                                Text(
-                                    text = "${msg.first}: ${msg.second}",
-                                    color = when (msg.first) {
-                                        "You" -> AmberGold
-                                        "System" -> Color(0xFF00E676)
-                                        else -> VioletNeon
-                                    },
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.SansSerif,
-                                    modifier = Modifier.padding(vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Input row
-                    var chatInputText by remember { mutableStateOf("") }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = chatInputText,
-                            onValueChange = { chatInputText = it },
-                            placeholder = { Text("Send strategy taunt...", fontSize = 11.sp, color = TextMuted) },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
-                                focusedBorderColor = AmberGold.copy(alpha = 0.5f),
-                                unfocusedBorderColor = Color(0x22FFFFFF),
-                                focusedContainerColor = DarkBg,
-                                unfocusedContainerColor = DarkBg
-                            ),
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp),
-                            modifier = Modifier.weight(1f).height(46.dp),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Button(
-                            onClick = {
-                                if (chatInputText.isNotBlank()) {
-                                    viewModel.sendChatMessage(chatInputText)
-                                    chatInputText = ""
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
-                            contentPadding = PaddingValues(horizontal = 10.dp),
-                            modifier = Modifier.height(42.dp)
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = "Send", tint = DarkBg, modifier = Modifier.size(14.dp))
                         }
                     }
                 }
@@ -2573,6 +2727,14 @@ fun SyncScreen(viewModel: GameViewModel) {
             }
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+        Text(
+            text = "App Version: ${com.example.BuildConfig.VERSION_NAME} (Build ${com.example.BuildConfig.VERSION_CODE})",
+            color = TextMuted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(bottom = 16.dp).testTag("app_version_label")
+        )
+
     }
 }
 
@@ -3067,9 +3229,15 @@ fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
     // it's gone. Real Google Sign-In shows Google's OWN system-rendered account picker via the
     // Credential Manager API; this dialog is now just a simple explainer + trigger button.
     val context = LocalContext.current
+    var isSandboxMode by remember { mutableStateOf(false) }
+    var sandboxName by remember { mutableStateOf("Vanguard Hero") }
 
     Dialog(
-        onDismissRequest = { if (!viewModel.isSigningInGoogle) viewModel.isGoogleAuthDialogOpen = false },
+        onDismissRequest = { 
+            if (!viewModel.isSigningInGoogle && !viewModel.isSigningInSandbox) {
+                viewModel.isGoogleAuthDialogOpen = false 
+            }
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
@@ -3105,7 +3273,7 @@ fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        "Sign in with Google",
+                        if (isSandboxMode) "Sandbox Guest Sign-In" else "Sign in with Google",
                         color = Color.White,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
@@ -3116,46 +3284,112 @@ fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
                 Spacer(modifier = Modifier.height(14.dp))
 
                 Text(
-                    text = "Link your Google account to save your progress and play online matches. You'll pick your account on Google's own sign-in screen.",
+                    text = if (isSandboxMode) {
+                        "Create a local Sandbox Guest Identity. This uses Firebase Anonymous authentication to give you a real unique online UID so you can test and play real online matchmaking or tournaments instantly without needing Google Play Services configured on your device."
+                    } else {
+                        "Link your Google account to save your progress and play online matches. Note: Real Google Sign-In requires active Google Play Services and correct SHA-1 registration on the Firebase console."
+                    },
                     color = TextGray,
                     fontSize = 11.sp,
                     textAlign = TextAlign.Center,
                     lineHeight = 16.sp
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                if (viewModel.isSigningInGoogle) {
+                if (viewModel.isSigningInGoogle || viewModel.isSigningInSandbox) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         CircularProgressIndicator(color = Color(0xFF4285F4), modifier = Modifier.size(40.dp))
                         Spacer(modifier = Modifier.height(14.dp))
-                        Text("Waiting on Google...", color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (viewModel.isSigningInGoogle) "Waiting on Google..." else "Setting up Sandbox...",
+                            color = AmberGold,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 } else {
-                    Button(
-                        onClick = {
-                            viewModel.startGoogleSignIn(context) {
-                                viewModel.isGoogleAuthDialogOpen = false
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        modifier = Modifier.fillMaxWidth().height(46.dp)
-                    ) {
-                        Text("CONTINUE WITH GOOGLE", color = Color(0xFF1F1F1F), fontSize = 12.sp, fontWeight = FontWeight.Black)
-                    }
+                    if (isSandboxMode) {
+                        OutlinedTextField(
+                            value = sandboxName,
+                            onValueChange = { if (it.length <= 15) sandboxName = it },
+                            label = { Text("Choose Combat Nickname", color = TextGray) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = AmberGold,
+                                unfocusedBorderColor = Color.DarkGray,
+                                focusedContainerColor = Color(0xFF161A22),
+                                unfocusedContainerColor = Color(0xFF161A22)
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("sandbox_name_input")
+                        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                    Button(
-                        onClick = { viewModel.isGoogleAuthDialogOpen = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                        border = BorderStroke(1.dp, Color.Gray),
-                        modifier = Modifier.fillMaxWidth().height(40.dp)
-                    ) {
-                        Text("CANCEL", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = {
+                                if (sandboxName.isNotBlank()) {
+                                    viewModel.startSandboxSignIn(sandboxName.trim()) {
+                                        viewModel.isGoogleAuthDialogOpen = false
+                                    }
+                                } else {
+                                    viewModel.triggerNotification("Nickname cannot be blank")
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                            modifier = Modifier.fillMaxWidth().height(46.dp).testTag("sandbox_continue_button")
+                        ) {
+                            Text("CONFIRM & ENTER SANDBOX", color = DarkBg, fontSize = 12.sp, fontWeight = FontWeight.Black)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        TextButton(
+                            onClick = { isSandboxMode = false }
+                        ) {
+                            Text("← Back to Real Google Sign-In", color = Color(0xFF2979FF), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                viewModel.startGoogleSignIn(context) {
+                                    viewModel.isGoogleAuthDialogOpen = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                            modifier = Modifier.fillMaxWidth().height(46.dp).testTag("google_continue_button")
+                        ) {
+                            Text("CONTINUE WITH REAL GOOGLE", color = Color(0xFF1F1F1F), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = { isSandboxMode = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F242C)),
+                            border = BorderStroke(1.dp, AmberGold.copy(alpha = 0.6f)),
+                            modifier = Modifier.fillMaxWidth().height(46.dp).testTag("sandbox_toggle_button")
+                        ) {
+                            Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = AmberGold, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("BYPASS GOOGLE / USE SANDBOX", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { viewModel.isGoogleAuthDialogOpen = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                            border = BorderStroke(1.dp, Color.Gray),
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                        ) {
+                            Text("CANCEL", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
