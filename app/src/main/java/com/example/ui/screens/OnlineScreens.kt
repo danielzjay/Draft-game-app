@@ -60,7 +60,14 @@ fun RealOnlineMatchScreen(viewModel: GameViewModel) {
         )
 
         if (viewModel.myUid == null) {
-            Text("Sign in with Google (Profile tab) to play online.", color = TextMuted, fontSize = 11.sp)
+            Text("You need to sign in to play online.", color = TextMuted, fontSize = 11.sp, modifier = Modifier.padding(bottom = 10.dp))
+            Button(
+                onClick = { viewModel.isGoogleAuthDialogOpen = true },
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                modifier = Modifier.fillMaxWidth(0.8f).height(44.dp)
+            ) {
+                Text("SIGN IN WITH GOOGLE", color = Color(0xFF1F1F1F), fontSize = 11.sp, fontWeight = FontWeight.Black)
+            }
             return@Column
         }
 
@@ -233,7 +240,7 @@ private fun OnlinePieceView(piece: OnlineBoardPiece) {
 
 // ==================== TOURNAMENTS: BROWSER ====================
 @Composable
-fun TournamentBrowserScreen(viewModel: GameViewModel, formatFilter: String) {
+fun TournamentBrowserScreen(viewModel: GameViewModel, formatFilter: String?) {
     LaunchedEffect(Unit) { viewModel.loadOpenTournaments() }
 
     if (viewModel.currentTournament != null) {
@@ -247,20 +254,39 @@ fun TournamentBrowserScreen(viewModel: GameViewModel, formatFilter: String) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                if (formatFilter == TournamentFormat.LEAGUE) "VANGUARD LEAGUES" else "GLADIATOR BRACKETS",
-                color = AmberGold, fontSize = 16.sp, fontWeight = FontWeight.Black
-            )
+            Text("COMPETITIONS", color = AmberGold, fontSize = 16.sp, fontWeight = FontWeight.Black)
             IconButton(onClick = { viewModel.isCreateTournamentDialogOpen = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Create", tint = AmberGold)
             }
         }
         Text(
-            "Organizers choose the format when creating a competition — this tab just filters to $formatFilter.",
-            color = TextGray, fontSize = 10.sp, modifier = Modifier.padding(bottom = 12.dp)
+            "Organizers pick Bracket or League when creating a competition.",
+            color = TextGray, fontSize = 10.sp, modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        val filtered = viewModel.openTournaments.filter { it.format == formatFilter }
+        if (viewModel.myUid == null) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0x332979FF)),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Sign in to register or organize", color = TextWhite, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                    Button(
+                        onClick = { viewModel.isGoogleAuthDialogOpen = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text("Sign In", color = Color(0xFF1F1F1F), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        val filtered = if (formatFilter == null) viewModel.openTournaments else viewModel.openTournaments.filter { it.format == formatFilter }
         if (filtered.isEmpty()) {
             Text("No open competitions yet. Tap + to organize one.", color = TextMuted, fontSize = 11.sp)
         }
@@ -273,7 +299,7 @@ fun TournamentBrowserScreen(viewModel: GameViewModel, formatFilter: String) {
     }
 
     if (viewModel.isCreateTournamentDialogOpen) {
-        CreateTournamentDialog(viewModel, defaultFormat = formatFilter)
+        CreateTournamentDialog(viewModel, defaultFormat = formatFilter ?: TournamentFormat.BRACKET)
     }
 }
 
@@ -290,7 +316,17 @@ private fun TournamentRow(t: TournamentInfo, onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(t.name, color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(t.name, color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .background(if (t.format == TournamentFormat.LEAGUE) Color(0xFF2E7D32) else Color(0xFF5E35B1), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(if (t.format == TournamentFormat.LEAGUE) "LEAGUE" else "BRACKET", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
                 Text("by ${t.organizerName} • ${t.registeredUids.size} registered", color = TextGray, fontSize = 10.sp)
             }
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TextGray)

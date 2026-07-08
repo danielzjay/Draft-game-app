@@ -5,12 +5,6 @@
     <!-- Required for Google Sign-In (Firebase Auth) and the Relworx payment backend calls -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-
-    <!-- Declare attribution for audio control & AppOps tracking to resolve Android 11+ warnings -->
-    <attribution
-        android:tag="control_audio"
-        android:label="@string/app_name" />
 
     <application
         android:allowBackup="true"

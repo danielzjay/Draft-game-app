@@ -163,7 +163,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var isGoogleSignedIn by mutableStateOf(false)
     var signedInEmail by mutableStateOf<String?>(null)
     var isSigningInGoogle by mutableStateOf(false)
-    var isSigningInSandbox by mutableStateOf(false)
+    var googleSignInError by mutableStateOf<String?>(null)
 
     // --- DIALOGS & PROFILE MANAGEMENT ---
     var isProfileDialogOpen by mutableStateOf(false)
@@ -284,13 +284,17 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     // --- COMPREHENSIVE GAME MODE SELECTION SYSTEM ---
+    // Trimmed down to exactly the four modes actually needed: one vs bot offline, one vs one
+    // offline (same device), one vs one online (real matchmaking), and competitions. The old
+    // ONLINE_VS_BOT ("online-flavored" AI practice) was redundant with OFFLINE_VS_BOT and only
+    // added confusion about whether you were playing a real person; League and Ladder are now
+    // one Competitions entry, since the real tournament browser already lets an organizer pick
+    // Bracket or League per-competition — there was no need for two separate top-level modes.
     enum class SelectedGameMode {
-        LOCAL_PASS_AND_PLAY,
         OFFLINE_VS_BOT,
-        ONLINE_VS_BOT,
+        LOCAL_PASS_AND_PLAY,
         ONLINE_MATCHMAKING,
-        COMPETITION_LEAGUE,
-        COMPETITION_LADDER
+        COMPETITIONS
     }
 
     var selectedGameMode by mutableStateOf(SelectedGameMode.OFFLINE_VS_BOT)
@@ -311,32 +315,17 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 rollNewBotPersona()
                 triggerNotification("Switched to Offline Campaign: VS ${currentBotPersona.name}")
             }
-            SelectedGameMode.ONLINE_VS_BOT -> {
-                isOnlineMode = true
-                isVsBot = true
-                isRealHumanOpponent = false
-                rollNewBotPersona()
-                triggerNotification("Switched to Online VS ${currentBotPersona.name}")
-            }
             SelectedGameMode.ONLINE_MATCHMAKING -> {
                 isOnlineMode = true
                 isVsBot = false
                 isRealHumanOpponent = false
                 triggerNotification("Switched to Online Arena Matchmaking")
             }
-            SelectedGameMode.COMPETITION_LEAGUE -> {
+            SelectedGameMode.COMPETITIONS -> {
                 isOnlineMode = true
-                isVsBot = true
+                isVsBot = false
                 isRealHumanOpponent = false
-                rollNewBotPersona()
-                triggerNotification("Opened Vanguard League Competition Panel")
-            }
-            SelectedGameMode.COMPETITION_LADDER -> {
-                isOnlineMode = true
-                isVsBot = true
-                isRealHumanOpponent = false
-                rollNewBotPersona()
-                triggerNotification("Opened Gladiator Ladder Arena Brackets")
+                triggerNotification("Opened Competitions Browser")
             }
         }
         resetGame()
@@ -401,19 +390,14 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     // --- MUSIC & SOUND PREFERENCES ---
-    private val _musicVolume = mutableStateOf(0.7f)
-    var musicVolume: Float
-        get() = _musicVolume.value
+    var musicVolume by mutableStateOf(0.7f)
         set(value) {
-            _musicVolume.value = value
+            field = value
             SoundManager.musicVolume = value
         }
-
-    private val _soundVolume = mutableStateOf(0.8f)
-    var soundVolume: Float
-        get() = _soundVolume.value
+    var soundVolume by mutableStateOf(0.8f)
         set(value) {
-            _soundVolume.value = value
+            field = value
             SoundManager.sfxVolume = value
         }
 
@@ -2018,8 +2002,9 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     // Real Google Sign-In (Credential Manager + Firebase Auth). Requires a Context, which the UI
     // passes in from LocalContext.current — the ViewModel never holds onto it beyond this call.
     fun startGoogleSignIn(context: Context, onSuccess: () -> Unit = {}) {
-        if (isGoogleSignedIn || isSigningInGoogle || isSigningInSandbox) return
+        if (isGoogleSignedIn || isSigningInGoogle) return
         isSigningInGoogle = true
+        googleSignInError = null
         viewModelScope.launch {
             val result = GoogleAuthManager.signIn(context)
             isSigningInGoogle = false
@@ -2029,6 +2014,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 val name = user.displayName ?: "Google Player"
                 signedInEmail = email
                 isGoogleSignedIn = true
+                googleSignInError = null
 
                 val state = playerState.value ?: PlayerState()
                 repository.updatePlayerState(state.copy(playerName = name))
@@ -2041,35 +2027,8 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 )
                 onSuccess()
             }.onFailure { error ->
-                triggerNotification(error.message ?: "Google Sign-In failed.")
-            }
-        }
-    }
-
-    fun startSandboxSignIn(displayName: String, onSuccess: () -> Unit = {}) {
-        if (isGoogleSignedIn || isSigningInGoogle || isSigningInSandbox) return
-        isSigningInSandbox = true
-        viewModelScope.launch {
-            val result = GoogleAuthManager.signInAnonymously()
-            isSigningInSandbox = false
-
-            result.onSuccess { user ->
-                val email = "sandbox_${user.uid.take(6)}@combatdraughts.dev"
-                signedInEmail = email
-                isGoogleSignedIn = true
-
-                val state = playerState.value ?: PlayerState()
-                repository.updatePlayerState(state.copy(playerName = displayName))
-
-                triggerNotification("Signed in to Sandbox as $displayName")
-                repository.mineNewBlock(
-                    transactions = "[AUTH] Sandbox Guest Login Verified: $email",
-                    costCoins = 0,
-                    earnCoins = 0
-                )
-                onSuccess()
-            }.onFailure { error ->
-                triggerNotification(error.message ?: "Sandbox Sign-In failed.")
+                googleSignInError = error.message ?: "Google Sign-In failed."
+                triggerNotification(googleSignInError ?: "Google Sign-In failed.")
             }
         }
     }

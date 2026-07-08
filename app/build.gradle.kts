@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.draughtscombat.qdvyx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
-    versionName = "4.0"
+    versionCode = 2
+    versionName = "2.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
