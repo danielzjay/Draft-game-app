@@ -482,18 +482,39 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     val myUid: String? get() = com.example.auth.GoogleAuthManager.currentUser()?.uid
 
+    var waitingPlayers by mutableStateOf<List<com.example.network.QueueEntry>>(emptyList())
+    private var waitingPlayersJob: kotlinx.coroutines.Job? = null
+    // Bots are for OFFLINE play, or as an explicit online fallback when nobody real is
+    // available — never a silent substitute for a real opponent. This flips on only after
+    // real matchmaking has had a fair chance (30s) to find someone.
+    var canOfferBotFallback by mutableStateOf(false)
+
     fun startRealMatchmaking() {
         if (isSearchingRealMatch) return
         val name = playerState.value?.playerName ?: "Player"
         val mmr = playerState.value?.mmr ?: 1000
         isSearchingRealMatch = true
+        canOfferBotFallback = false
         onlineMatchError = null
+
+        waitingPlayersJob?.cancel()
+        waitingPlayersJob = viewModelScope.launch {
+            com.example.network.OnlineMatchRepository.observeWaitingPlayers(ruleSystem.name).collect {
+                waitingPlayers = it
+            }
+        }
+
         matchmakingJob = viewModelScope.launch {
             val joinResult = com.example.network.OnlineMatchRepository.joinQueue(name, mmr, ruleSystem.name)
             if (joinResult.isFailure) {
                 onlineMatchError = joinResult.exceptionOrNull()?.message ?: "Couldn't join matchmaking."
                 isSearchingRealMatch = false
                 return@launch
+            }
+            // Offer the bot fallback after a fair wait, without ever stopping the real search
+            launch {
+                delay(30_000)
+                if (isSearchingRealMatch) canOfferBotFallback = true
             }
             // Watch our own queue entry in case someone else pairs with us first
             launch {
@@ -515,15 +536,38 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
+    /** Skips straight to a specific waiting player instead of automatic pairing. */
+    fun challengeWaitingPlayer(opponent: com.example.network.QueueEntry) {
+        viewModelScope.launch {
+            val matchId = com.example.network.OnlineMatchRepository.challengePlayer(opponent, ruleSystem.name)
+            if (matchId != null) {
+                onRealMatchFound(matchId)
+            } else {
+                onlineMatchError = "That player is no longer available — they may have just been matched."
+            }
+        }
+    }
+
+    /** Explicit fallback ONLY — never automatic. The player chose this after real matchmaking came up empty. */
+    fun fallBackToBotMatch() {
+        cancelRealMatchmaking()
+        changeGameMode(SelectedGameMode.OFFLINE_VS_BOT)
+    }
+
     private fun onRealMatchFound(matchId: String) {
         isSearchingRealMatch = false
+        canOfferBotFallback = false
+        waitingPlayersJob?.cancel()
         matchmakingJob?.cancel()
         observeRealMatch(matchId)
     }
 
     fun cancelRealMatchmaking() {
         isSearchingRealMatch = false
+        canOfferBotFallback = false
         matchmakingJob?.cancel()
+        waitingPlayersJob?.cancel()
+        waitingPlayers = emptyList()
         viewModelScope.launch { com.example.network.OnlineMatchRepository.leaveQueue() }
     }
 
@@ -823,6 +867,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     // Reinitializes the checkers board using player's upgraded heroes
     fun resetGame(customHeroes: List<Hero>? = null) {
+        botMoveHistoryThisGame.clear()
         val currentHeroList = customHeroes ?: heroes.value
         if (currentHeroList.isEmpty()) return
 
@@ -1441,17 +1486,13 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         if (!redRemaining) {
             winnerMessage = "SHADOW CLAN VICTORIOUS!"
             SoundManager.playSfx(SoundManager.Sfx.DEFEAT)
-            if (!isRealHumanOpponent) {
-                viewModelScope.launch { LeaderboardRepository.reportBotMatchResult(currentBotPersona.name, currentBotPersona.baseMmr, botWon = true) }
-            }
+            recordBotMemoryForGame(botWon = true)
             return
         }
         if (!blackRemaining) {
             winnerMessage = "VANGUARD ORDER VICTORIOUS!"
             SoundManager.playSfx(SoundManager.Sfx.VICTORY_FANFARE)
-            if (!isRealHumanOpponent) {
-                viewModelScope.launch { LeaderboardRepository.reportBotMatchResult(currentBotPersona.name, currentBotPersona.baseMmr, botWon = false) }
-            }
+            recordBotMemoryForGame(botWon = false)
             // Reward match victory bonus
             viewModelScope.launch {
                 awardRewards(xpGained = 150, coinsGained = 75, isVictory = true)
@@ -1706,6 +1747,53 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     /** Picks the bot's move for this turn: real search, majority-capture-legal, with a tuned chance of an intentional mistake so lower difficulties genuinely feel weaker. */
+    // --- BOT MEMORY: a real, learning opening book (see BotMemoryEntry / BotMemoryRepository) ---
+    // Records (position, move) for every move the bot makes this game; scored against the final
+    // result once the game ends, then merged into local storage and synced to the shared pool.
+    private val botMoveHistoryThisGame = mutableListOf<Pair<String, String>>()
+
+    /**
+     * Bots are the only thing this learning system tracks — never a real human's moves. Only
+     * fires for bot-driven games (offline, or the explicit online bot fallback), and only bots
+     * that actually made moves this game (a real 1v1 match never touches this at all).
+     */
+    private fun recordBotMemoryForGame(botWon: Boolean) {
+        if (isRealHumanOpponent || botMoveHistoryThisGame.isEmpty()) {
+            botMoveHistoryThisGame.clear()
+            return
+        }
+        val thisGameMoves = botMoveHistoryThisGame.toList()
+        botMoveHistoryThisGame.clear()
+        viewModelScope.launch {
+            thisGameMoves.forEach { (posHash, moveKey) ->
+                repository.recordBotMemoryOutcome(posHash, moveKey, won = botWon)
+            }
+            // Only meaningful "when the user goes online" — quietly does nothing if signed out.
+            if (isGoogleSignedIn) {
+                val delta = thisGameMoves.map { (posHash, moveKey) ->
+                    BotMemoryEntry(posHash, moveKey, wins = if (botWon) 1 else 0, losses = if (botWon) 0 else 1)
+                }
+                com.example.network.BotMemoryRepository.uploadDelta(delta)
+            }
+        }
+    }
+
+    private fun canonicalPositionHash(pieces: List<BoardPiece>): String {
+        val boardPart = pieces.sortedWith(compareBy({ it.row }, { it.col }))
+            .joinToString("|") { "${it.row},${it.col},${if (it.isRed) 'R' else 'B'},${if (it.isKing) 'K' else 'M'}" }
+        return "${ruleSystem.name}:$boardPart"
+    }
+
+    private fun moveKeyOf(fromRow: Int, fromCol: Int, toRow: Int, toCol: Int) = "$fromRow,$fromCol-$toRow,$toCol"
+
+    /** Call once, right after a real sign-in — uploads any queued local learning and refreshes the shared book. */
+    fun syncBotMemoryWithCloud() {
+        viewModelScope.launch {
+            val top = com.example.network.BotMemoryRepository.downloadTopEntries()
+            if (top.isNotEmpty()) repository.mergeBotMemoryEntries(top)
+        }
+    }
+
     private suspend fun pickBotMove(): Triple<BoardPiece, Int, Int>? = withContext(Dispatchers.Default) {
         val difficulty = currentBotPersona.difficulty
         val botPieces = boardPieces.filter { !it.isRed }
@@ -1748,10 +1836,24 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
         var bestScore = Double.NEGATIVE_INFINITY
         val bestMoves = mutableListOf<Triple<BoardPiece, Int, Int>>()
+        val currentPositionHash = canonicalPositionHash(boardPieces)
         for ((piece, toR, toC) in candidates) {
             val simPiece = SimPiece(piece.row, piece.col, piece.isRed, piece.isKing)
             val resultBoard = resolveFullTurn(simPiece, toR, toC, simBoard, isJump)
-            val score = minimax(resultBoard, (effectiveDepth - 1).coerceAtLeast(0), true, false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)
+            var score = minimax(resultBoard, (effectiveDepth - 1).coerceAtLeast(0), true, false, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY)
+
+            // Real learning: nudge toward moves that have actually won before from this exact
+            // position, away from ones that have lost — on top of the tactical search, not
+            // instead of it. Capped so a small sample size can't override a clearly bad tactical
+            // move; this is a bias, not a replacement for calculation.
+            val moveKey = moveKeyOf(piece.row, piece.col, toR, toC)
+            val memory = repository.getBotMemoryBias(currentPositionHash, moveKey)
+            if (memory != null && (memory.wins + memory.losses) > 0) {
+                val winRatio = memory.wins.toDouble() / (memory.wins + memory.losses)
+                val confidence = (memory.wins + memory.losses).coerceAtMost(20) / 20.0
+                score += (winRatio - 0.5) * 2.0 * confidence // range roughly [-1, 1]
+            }
+
             when {
                 score > bestScore -> {
                     bestScore = score
@@ -1761,7 +1863,9 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 score == bestScore -> bestMoves.add(Triple(piece, toR, toC))
             }
         }
-        bestMoves.randomOrNull() ?: candidates.random()
+        val chosen = bestMoves.randomOrNull() ?: candidates.random()
+        botMoveHistoryThisGame.add(currentPositionHash to moveKeyOf(chosen.first.row, chosen.first.col, chosen.second, chosen.third))
+        chosen
     }
 
     // Bot AI Decision Engine: real search-based move selection (see pickBotMove above)
@@ -2025,6 +2129,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     costCoins = 0,
                     earnCoins = 0
                 )
+                syncBotMemoryWithCloud()
                 onSuccess()
             }.onFailure { error ->
                 googleSignInError = error.message ?: "Google Sign-In failed."
@@ -2038,6 +2143,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         val user = GoogleAuthManager.currentUser() ?: return
         signedInEmail = user.email
         isGoogleSignedIn = true
+        syncBotMemoryWithCloud()
     }
 
     fun googleSignOut(context: Context) {

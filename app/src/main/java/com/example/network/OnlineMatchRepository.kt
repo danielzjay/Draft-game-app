@@ -75,6 +75,70 @@ object OnlineMatchRepository {
      * same rule system; if found AND our uid sorts first, claims them and creates the match.
      * Returns the matchId if a match was created THIS call, else null (keep polling).
      */
+    /** Live list of everyone currently waiting for a match under this rule system, for a manual "Challenge" list — a fallback for when automatic pairing hasn't found anyone yet. */
+    fun observeWaitingPlayers(ruleSystem: String): Flow<List<QueueEntry>> {
+        val db = dbOrNull ?: return flowOf(emptyList())
+        val selfUid = currentUid()
+        return callbackFlow {
+            val reg = db.collection(QUEUE)
+                .whereEqualTo("ruleSystem", ruleSystem)
+                .orderBy("joinedAt", Query.Direction.ASCENDING)
+                .limit(30)
+                .addSnapshotListener { snap, _ ->
+                    val list = snap?.documents
+                        ?.filter { it.id != selfUid && it.getString("matchedMatchId") == null }
+                        ?.mapNotNull { doc ->
+                            QueueEntry(
+                                uid = doc.id,
+                                name = doc.getString("name") ?: "Player",
+                                mmr = doc.getLong("mmr")?.toInt() ?: 1000,
+                                ruleSystem = doc.getString("ruleSystem") ?: ruleSystem,
+                                joinedAt = doc.getLong("joinedAt") ?: 0L
+                            )
+                        } ?: emptyList()
+                    trySend(list)
+                }
+            awaitClose { reg.remove() }
+        }
+    }
+
+    /** Directly pairs with a SPECIFIC waiting player picked from the list, instead of waiting on automatic matching. */
+    suspend fun challengePlayer(opponent: QueueEntry, ruleSystem: String): String? {
+        val db = dbOrNull ?: return null
+        val selfUid = currentUid() ?: return null
+        return try {
+            val selfSnap = db.collection(QUEUE).document(selfUid).get().await()
+            if (!selfSnap.exists() || selfSnap.getString("matchedMatchId") != null) return null
+            val opponentSnap = db.collection(QUEUE).document(opponent.uid).get().await()
+            if (!opponentSnap.exists() || opponentSnap.getString("matchedMatchId") != null) return null
+
+            val matchId = db.collection(MATCHES).document().id
+            val selfName = selfSnap.getString("name") ?: "Player"
+            val startingBoard = buildStartingBoard(ruleSystem)
+            val match = mapOf(
+                "matchId" to matchId,
+                "player1Uid" to selfUid, "player1Name" to selfName,
+                "player2Uid" to opponent.uid, "player2Name" to opponent.name,
+                "ruleSystem" to ruleSystem,
+                "board" to startingBoard.map { pieceToMap(it) },
+                "turnUid" to selfUid,
+                "status" to MatchStatus.ACTIVE,
+                "winnerUid" to null,
+                "isCompetition" to false,
+                "tournamentId" to null,
+                "fixtureId" to null,
+                "lastMoveAt" to System.currentTimeMillis(),
+                "createdAt" to System.currentTimeMillis()
+            )
+            db.collection(MATCHES).document(matchId).set(match).await()
+            db.collection(QUEUE).document(selfUid).update("matchedMatchId", matchId).await()
+            db.collection(QUEUE).document(opponent.uid).update("matchedMatchId", matchId).await()
+            matchId
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     suspend fun attemptPairing(ruleSystem: String): String? {
         val db = dbOrNull ?: return null
         val selfUid = currentUid() ?: return null

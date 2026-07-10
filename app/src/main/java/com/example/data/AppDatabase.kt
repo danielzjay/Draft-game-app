@@ -11,8 +11,8 @@ import kotlinx.coroutines.launch
 import java.security.MessageDigest
 
 @Database(
-    entities = [Hero::class, PlayerState::class, BlockchainBlock::class, LeaderboardEntry::class],
-    version = 3,
+    entities = [Hero::class, PlayerState::class, BlockchainBlock::class, LeaderboardEntry::class, BotMemoryEntry::class],
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

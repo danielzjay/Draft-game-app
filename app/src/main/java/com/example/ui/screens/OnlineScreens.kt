@@ -5,6 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import com.example.ui.components.GameButton
+import com.example.ui.components.GameDangerButton
+import com.example.ui.components.GamePanel
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -83,14 +86,52 @@ fun RealOnlineMatchScreen(viewModel: GameViewModel) {
             OutlinedButton(onClick = { viewModel.cancelRealMatchmaking() }) {
                 Text("Cancel", color = TextGray)
             }
-        } else {
-            Button(
-                onClick = { viewModel.startRealMatchmaking() },
-                colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
-                modifier = Modifier.fillMaxWidth(0.8f).height(46.dp)
-            ) {
-                Text("FIND A REAL OPPONENT", color = DarkBg, fontSize = 12.sp, fontWeight = FontWeight.Black)
+
+            if (viewModel.waitingPlayers.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text("Or challenge someone directly:", color = TextGray, fontSize = 10.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyColumn(modifier = Modifier.heightIn(max = 220.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(viewModel.waitingPlayers) { p ->
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                            border = BorderStroke(1.dp, Color(0x33FFC107)),
+                            modifier = Modifier.fillMaxWidth().clickable { viewModel.challengeWaitingPlayer(p) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(p.name, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("MMR ${p.mmr} • waiting", color = TextGray, fontSize = 9.sp)
+                                }
+                                Text("Challenge", color = AmberGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
             }
+
+            if (viewModel.canOfferBotFallback) {
+                Spacer(modifier = Modifier.height(20.dp))
+                Text("Nobody's available right now.", color = TextMuted, fontSize = 10.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedButton(
+                    onClick = { viewModel.fallBackToBotMatch() },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AmberGold),
+                    border = BorderStroke(1.dp, AmberGold)
+                ) {
+                    Text("Play a Bot Instead", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        } else {
+            GameButton(
+                text = "FIND A REAL OPPONENT",
+                onClick = { viewModel.startRealMatchmaking() },
+                modifier = Modifier.fillMaxWidth(0.8f)
+            )
         }
     }
 }
@@ -160,13 +201,12 @@ private fun LiveOnlineMatchBoard(viewModel: GameViewModel, match: OnlineMatch) {
 
         if (match.status == MatchStatus.ACTIVE) {
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedButton(
+            GameDangerButton(
+                text = "Resign",
                 onClick = { viewModel.resignRealMatch() },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFEF5350)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Resign", fontSize = 11.sp)
-            }
+                modifier = Modifier.fillMaxWidth(),
+                height = 44.dp
+            )
         }
     }
 }

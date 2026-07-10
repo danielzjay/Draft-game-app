@@ -54,4 +54,17 @@ interface AppDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLeaderboard(entries: List<LeaderboardEntry>)
+
+    // Bot Memory Operations
+    @Query("SELECT * FROM bot_memory WHERE positionHash = :positionHash AND moveKey = :moveKey LIMIT 1")
+    suspend fun getBotMemoryEntry(positionHash: String, moveKey: String): BotMemoryEntry?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBotMemoryEntry(entry: BotMemoryEntry)
+
+    @Query("SELECT * FROM bot_memory")
+    suspend fun getAllBotMemory(): List<BotMemoryEntry>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBotMemoryEntries(entries: List<BotMemoryEntry>)
 }

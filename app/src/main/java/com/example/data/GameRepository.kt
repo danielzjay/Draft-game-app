@@ -17,6 +17,29 @@ class GameRepository(private val appDao: AppDao) {
         appDao.insertLeaderboard(entries)
     }
 
+    suspend fun getBotMemoryBias(positionHash: String, moveKey: String): BotMemoryEntry? {
+        return appDao.getBotMemoryEntry(positionHash, moveKey)
+    }
+
+    suspend fun recordBotMemoryOutcome(positionHash: String, moveKey: String, won: Boolean) {
+        val existing = appDao.getBotMemoryEntry(positionHash, moveKey)
+        val updated = if (existing != null) {
+            existing.copy(
+                wins = existing.wins + if (won) 1 else 0,
+                losses = existing.losses + if (won) 0 else 1
+            )
+        } else {
+            BotMemoryEntry(positionHash, moveKey, wins = if (won) 1 else 0, losses = if (won) 0 else 1)
+        }
+        appDao.upsertBotMemoryEntry(updated)
+    }
+
+    suspend fun getAllBotMemory(): List<BotMemoryEntry> = appDao.getAllBotMemory()
+
+    suspend fun mergeBotMemoryEntries(entries: List<BotMemoryEntry>) {
+        appDao.insertBotMemoryEntries(entries)
+    }
+
     suspend fun getPlayerStateDirect(): PlayerState? {
         return appDao.getPlayerStateDirect()
     }

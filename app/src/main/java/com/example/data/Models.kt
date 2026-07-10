@@ -57,6 +57,22 @@ data class LeaderboardEntry(
     val mmr: Int,
     val winRate: Double,
     val favoriteHero: String,
-    val isCurrentUser: Boolean = false,
-    val isBot: Boolean = false
+    val isCurrentUser: Boolean = false
+)
+
+/**
+ * Bot "memory" — a simple, real opening/position book. Key = a canonical snapshot of the board
+ * (piece positions, colors, king status) at the moment a move was made, combined with the exact
+ * move played from it. Every time a bot game ends, every move the BOT made gets one win or one
+ * loss added here for its (position, move) pair. Over many games this starts to bias the bot
+ * toward moves that have actually won before from a given shape of board, and away from ones
+ * that have lost — on top of (not instead of) the real minimax search, which still does the
+ * tactical heavy lifting. See BotMemoryRepository for how this syncs with other players' data.
+ */
+@Entity(tableName = "bot_memory", primaryKeys = ["positionHash", "moveKey"])
+data class BotMemoryEntry(
+    val positionHash: String,
+    val moveKey: String, // "fromRow,fromCol-toRow,toCol"
+    val wins: Int = 0,
+    val losses: Int = 0
 )

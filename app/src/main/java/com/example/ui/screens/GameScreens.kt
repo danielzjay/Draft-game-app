@@ -255,7 +255,10 @@ fun GameHeader(playerState: PlayerState?, viewModel: GameViewModel) {
 fun GameBottomNavigation(selectedTab: GameTab, onTabSelected: (GameTab) -> Unit) {
     NavigationBar(
         containerColor = DarkSurface,
-        tonalElevation = 8.dp
+        tonalElevation = 0.dp,
+        modifier = Modifier.border(
+            androidx.compose.foundation.BorderStroke(1.dp, AmberGold.copy(alpha = 0.25f))
+        )
     ) {
         val items = listOf(
             Triple(GameTab.BATTLE, Icons.Default.Grid4x4, "Battle"),
@@ -273,9 +276,9 @@ fun GameBottomNavigation(selectedTab: GameTab, onTabSelected: (GameTab) -> Unit)
                 icon = { Icon(icon, contentDescription = label) },
                 label = { Text(label, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = Color(0xFF1D192B),
-                    selectedTextColor = VioletNeon,
-                    indicatorColor = VioletNeon,
+                    selectedIconColor = DarkBg,
+                    selectedTextColor = AmberGold,
+                    indicatorColor = AmberGold,
                     unselectedIconColor = TextGray,
                     unselectedTextColor = TextGray
                 ),
@@ -1507,16 +1510,6 @@ fun LeaderboardScreen(viewModel: GameViewModel) {
                                                 .padding(horizontal = 4.dp, vertical = 1.dp)
                                         ) {
                                             Text("YOU", color = DarkBg, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                    if (entry.isBot) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Box(
-                                            modifier = Modifier
-                                                .background(Color(0xFF5E35B1), RoundedCornerShape(4.dp))
-                                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                                        ) {
-                                            Text("CPU", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                                         }
                                     }
                                 }
