@@ -11,6 +11,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.R
 import com.example.audio.SoundManager
 import com.example.auth.GoogleAuthManager
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.tasks.await
 import com.example.data.*
 import com.example.network.LeaderboardRepository
 import com.example.network.PaymentRepository
@@ -164,6 +167,18 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var signedInEmail by mutableStateOf<String?>(null)
     var isSigningInGoogle by mutableStateOf(false)
     var googleSignInError by mutableStateOf<String?>(null)
+    var googleSignInTraceLogs by mutableStateOf<List<String>>(emptyList())
+
+    // --- EMAIL AUTH & TERMS REDIRECT ---
+    var emailInput by mutableStateOf("")
+    var passwordInput by mutableStateOf("")
+    var isEmailRegisterMode by mutableStateOf(false)
+    var isSigningInEmail by mutableStateOf(false)
+    var emailAuthError by mutableStateOf<String?>(null)
+    
+    var isTermsAccepted by mutableStateOf(false)
+    var showTermsOverlay by mutableStateOf(false)
+    var pendingAuthAction by mutableStateOf<(() -> Unit)?>(null)
 
     // --- DIALOGS & PROFILE MANAGEMENT ---
     var isProfileDialogOpen by mutableStateOf(false)
@@ -185,6 +200,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     // --- GAME RULES & HELP SYSTEM ---
     var isRulesDialogOpen by mutableStateOf(false)
+    var showSplashScreen by mutableStateOf(true)
 
     // --- PREMIUM PAYMENT PORTAL GATEWAY (Relworx Mobile Money) ---
     var isPaymentPortalOpen by mutableStateOf(false)
@@ -390,14 +406,18 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     // --- MUSIC & SOUND PREFERENCES ---
-    var musicVolume by mutableStateOf(0.7f)
+    private var _musicVolume = mutableStateOf(0.7f)
+    var musicVolume: Float
+        get() = _musicVolume.value
         set(value) {
-            field = value
+            _musicVolume.value = value
             SoundManager.musicVolume = value
         }
-    var soundVolume by mutableStateOf(0.8f)
+    private var _soundVolume = mutableStateOf(0.8f)
+    var soundVolume: Float
+        get() = _soundVolume.value
         set(value) {
-            field = value
+            _soundVolume.value = value
             SoundManager.sfxVolume = value
         }
 
@@ -861,6 +881,20 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 if (heroList.isNotEmpty() && boardPieces.isEmpty()) {
                     resetGame(heroList)
                 }
+            }
+        }
+        // Global live presence notification observer
+        viewModelScope.launch {
+            var knownOnlinePlayers = emptySet<String>()
+            com.example.network.OnlineMatchRepository.observeAllWaitingPlayers().collect { list ->
+                val newOnlinePlayers = list.map { it.uid }.toSet()
+                if (knownOnlinePlayers.isNotEmpty()) {
+                    val newlyJoined = list.filter { it.uid !in knownOnlinePlayers }
+                    for (player in newlyJoined) {
+                        triggerNotification("⚔️ ${player.name} is now LIVE! Challenge them under ${player.ruleSystem.replace('_', ' ')}!")
+                    }
+                }
+                knownOnlinePlayers = newOnlinePlayers
             }
         }
     }
@@ -2109,8 +2143,11 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         if (isGoogleSignedIn || isSigningInGoogle) return
         isSigningInGoogle = true
         googleSignInError = null
+        googleSignInTraceLogs = emptyList()
         viewModelScope.launch {
-            val result = GoogleAuthManager.signIn(context)
+            val result = GoogleAuthManager.signIn(context) { logMsg ->
+                googleSignInTraceLogs = googleSignInTraceLogs + logMsg
+            }
             isSigningInGoogle = false
 
             result.onSuccess { user ->
@@ -2138,6 +2175,99 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
+    fun startEmailAuth(context: Context, onSuccess: () -> Unit = {}) {
+        val email = emailInput.trim()
+        val password = passwordInput.trim()
+
+        if (email.isEmpty() || password.isEmpty()) {
+            emailAuthError = "Email and password cannot be empty."
+            triggerNotification(emailAuthError!!)
+            return
+        }
+
+        if (password.length < 6) {
+            emailAuthError = "Password must be at least 6 characters."
+            triggerNotification(emailAuthError!!)
+            return
+        }
+
+        isSigningInEmail = true
+        emailAuthError = null
+        googleSignInTraceLogs = emptyList() // Trace using same diagnostic logs console
+
+        val onLog = { logMsg: String ->
+            googleSignInTraceLogs = googleSignInTraceLogs + logMsg
+        }
+
+        onLog("Starting Email/Password authentication flow...")
+        onLog("Target email: $email")
+
+        viewModelScope.launch {
+            try {
+                val auth = FirebaseAuth.getInstance()
+                // Make sure to import kotlinx.coroutines.tasks.await
+                if (isEmailRegisterMode) {
+                    onLog("Calling Firebase createUserWithEmailAndPassword...")
+                    val result = auth.createUserWithEmailAndPassword(email, password).await()
+                    val user = result.user
+                    if (user == null) {
+                        throw Exception("Registration succeeded but returned empty user profile.")
+                    }
+                    onLog("[SUCCESS] Created account for ${user.email}")
+                    signedInEmail = user.email
+                    isGoogleSignedIn = true
+                    emailAuthError = null
+                    isSigningInEmail = false
+                    
+                    val name = email.substringBefore("@")
+                    val state = playerState.value ?: PlayerState()
+                    repository.updatePlayerState(state.copy(playerName = name))
+                    
+                    triggerNotification("Account created and signed in as $email")
+                    repository.mineNewBlock(
+                        transactions = "[AUTH] Email Registration Verified: $email",
+                        costCoins = 0,
+                        earnCoins = 0
+                    )
+                    syncBotMemoryWithCloud()
+                    onSuccess()
+                } else {
+                    onLog("Calling Firebase signInWithEmailAndPassword...")
+                    val result = auth.signInWithEmailAndPassword(email, password).await()
+                    val user = result.user
+                    if (user == null) {
+                        throw Exception("Sign-in succeeded but returned empty user profile.")
+                    }
+                    onLog("[SUCCESS] Authenticated session for ${user.email}")
+                    signedInEmail = user.email
+                    isGoogleSignedIn = true
+                    emailAuthError = null
+                    isSigningInEmail = false
+                    
+                    val name = user.displayName ?: email.substringBefore("@")
+                    val state = playerState.value ?: PlayerState()
+                    repository.updatePlayerState(state.copy(playerName = name))
+                    
+                    triggerNotification("Signed in as $email")
+                    repository.mineNewBlock(
+                        transactions = "[AUTH] Email Login Verified: $email",
+                        costCoins = 0,
+                        earnCoins = 0
+                    )
+                    syncBotMemoryWithCloud()
+                    onSuccess()
+                }
+            } catch (e: Exception) {
+                isSigningInEmail = false
+                val errText = e.message ?: "Authentication failed."
+                emailAuthError = errText
+                onLog("[FATAL] Email auth failed: $errText")
+                onLog("[TRACE] ${android.util.Log.getStackTraceString(e)}")
+                triggerNotification(errText)
+            }
+        }
+    }
+
     /** Call once on app start (e.g. from MainActivity/init) to restore a previous session. */
     fun restoreGoogleSession() {
         val user = GoogleAuthManager.currentUser() ?: return
@@ -2153,7 +2283,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             signedInEmail = null
             val state = playerState.value ?: PlayerState()
             repository.updatePlayerState(state.copy(playerName = "Guest Vanguard"))
-            triggerNotification("Signed out of Google Account.")
+            triggerNotification("Signed out of Cloud Account.")
         }
     }
 

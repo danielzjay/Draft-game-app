@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+// Forced reload of the preview to fix freezing issues
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -38,6 +40,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import com.example.data.*
 import com.example.ui.*
 import com.example.ui.components.HeroDrawing
@@ -48,10 +53,112 @@ import java.util.Locale
 import kotlinx.coroutines.delay
 
 @Composable
+fun SplashScreenComponent(viewModel: GameViewModel) {
+    LaunchedEffect(Unit) {
+        delay(3000)
+        viewModel.showSplashScreen = false
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF07070A)),
+        contentAlignment = Alignment.Center
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.img_splash_screen_1783691857912),
+            contentDescription = "Splash background",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.4f),
+                            Color.Black.copy(alpha = 0.9f)
+                        )
+                    )
+                )
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp)
+                .align(Alignment.Center)
+        ) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(2.dp, AmberGold),
+                elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+                modifier = Modifier
+                    .size(110.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.img_app_icon_1783691822115),
+                    contentDescription = "App Logo",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "DRAUGHTS COMBAT",
+                color = AmberGold,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = "V5.0 • THE PRESENCE UPDATE",
+                color = TextWhite.copy(alpha = 0.7f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+
+            Spacer(modifier = Modifier.height(48.dp))
+
+            CircularProgressIndicator(
+                color = AmberGold,
+                strokeWidth = 3.dp,
+                modifier = Modifier.size(36.dp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "LOADING TACTICAL ARENA...",
+                color = TextGray,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp
+            )
+        }
+    }
+}
+
+@Composable
 fun MainGameScreen(
     viewModel: GameViewModel,
     modifier: Modifier = Modifier
 ) {
+    if (viewModel.showSplashScreen) {
+        SplashScreenComponent(viewModel = viewModel)
+        return
+    }
+
     val playerState by viewModel.playerState.collectAsState()
     val activeTab = viewModel.currentTab
 
@@ -1593,7 +1700,7 @@ fun SyncScreen(viewModel: GameViewModel) {
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = if (viewModel.isGoogleSignedIn) "Google Profile Linked" else "Guest Account Active",
+                            text = if (viewModel.isGoogleSignedIn) "Cloud Profile Linked" else "Guest Account Active",
                             color = TextWhite,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
@@ -1605,7 +1712,7 @@ fun SyncScreen(viewModel: GameViewModel) {
                         )
                     }
                     
-                    if (viewModel.isSigningInGoogle) {
+                    if (viewModel.isSigningInEmail) {
                         CircularProgressIndicator(color = AmberGold, modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                     } else if (viewModel.isGoogleSignedIn) {
                         Button(
@@ -1623,9 +1730,9 @@ fun SyncScreen(viewModel: GameViewModel) {
                             contentPadding = PaddingValues(horizontal = 12.dp),
                             modifier = Modifier.height(34.dp)
                         ) {
-                            Icon(Icons.Default.Login, contentDescription = "Google Sign In", tint = DarkBg, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Login, contentDescription = "Sign In", tint = DarkBg, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Google Sign In", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Sign In", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -2037,7 +2144,7 @@ fun SyncScreen(viewModel: GameViewModel) {
                         Icon(Icons.Default.Group, contentDescription = "Online Play", tint = if (viewModel.isGoogleSignedIn) DarkBg else Color.Gray)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (viewModel.isGoogleSignedIn) "FIND MULTIPLAYER MATCH" else "LINK GOOGLE FIRST",
+                            text = if (viewModel.isGoogleSignedIn) "FIND MULTIPLAYER MATCH" else "LINK ACCOUNT FIRST",
                             color = if (viewModel.isGoogleSignedIn) DarkBg else Color.Gray,
                             fontWeight = FontWeight.Bold,
                             fontSize = 12.sp
@@ -2949,9 +3056,9 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Google Link Section
+                // Cloud Account Link Section
                 Text(
-                    text = "GOOGLE ACCOUNT ASSOCIATION",
+                    text = "CLOUD ACCOUNT ASSOCIATION",
                     color = TextWhite,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
@@ -2994,7 +3101,7 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Guest Profile Active", color = TextGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            Text("Connect Google to unlock online matchmaking.", color = TextMuted, fontSize = 9.sp)
+                            Text("Connect your email account to unlock online matchmaking.", color = TextMuted, fontSize = 9.sp)
                         }
                         Button(
                             onClick = {
@@ -3005,9 +3112,9 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
                             contentPadding = PaddingValues(horizontal = 12.dp),
                             modifier = Modifier.height(34.dp)
                         ) {
-                            Icon(Icons.Default.Login, contentDescription = "Google", tint = DarkBg, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Default.Login, contentDescription = "Account", tint = DarkBg, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Link Google", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Link Account", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -3029,14 +3136,18 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
 
 @Composable
 fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
-    // This used to draw a fake "choose an account" list inside the app — that's a dangerous
-    // pattern (it looks exactly like a phishing screen impersonating Google's real picker), so
-    // it's gone. Real Google Sign-In shows Google's OWN system-rendered account picker via the
-    // Credential Manager API; this dialog is now just a simple explainer + trigger button.
     val context = LocalContext.current
+    var activeTab by remember { mutableStateOf(0) } // 0 = Google Auth, 1 = Email Auth
+    var showPassword by remember { mutableStateOf(false) }
+    var termsCheckboxChecked by remember { mutableStateOf(false) }
 
     Dialog(
-        onDismissRequest = { if (!viewModel.isSigningInGoogle) viewModel.isGoogleAuthDialogOpen = false },
+        onDismissRequest = { 
+            if (!viewModel.isSigningInGoogle && !viewModel.isSigningInEmail) {
+                viewModel.isGoogleAuthDialogOpen = false 
+                viewModel.showTermsOverlay = false
+            }
+        },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Card(
@@ -3047,95 +3158,422 @@ fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
                 .fillMaxWidth(0.92f)
                 .padding(16.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth()
+            if (viewModel.showTermsOverlay) {
+                // TERMS & CONDITIONS REDIRECT VIEW
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(Color.White, CircleShape),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = null,
+                            tint = AmberGold,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            "G",
-                            color = Color(0xFF4285F4),
-                            fontWeight = FontWeight.Black,
-                            fontSize = 20.sp,
-                            fontFamily = FontFamily.SansSerif
+                            "Terms & Privacy Policy",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
-                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
                     Text(
-                        "Sign in with Google",
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.SansSerif
+                        text = "To keep Draughts Combat fair, secure, and integrated, you must review and accept our guidelines before authenticating your account.",
+                        color = TextGray,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
                     )
-                }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
 
-                Text(
-                    text = "Link your Google account to save your progress and play online matches. You'll pick your account on Google's own sign-in screen.",
-                    color = TextGray,
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.Center,
-                    lineHeight = 16.sp
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                if (viewModel.isSigningInGoogle) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF07090C)),
+                        border = BorderStroke(1.dp, Color(0x332979FF)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(220.dp)
                     ) {
-                        CircularProgressIndicator(color = Color(0xFF4285F4), modifier = Modifier.size(40.dp))
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Text("Waiting on Google...", color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    viewModel.googleSignInError?.let { err ->
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0x33FF5252)),
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize().padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Text(
-                                text = err,
-                                color = Color(0xFFFFCDD2),
-                                fontSize = 10.sp,
-                                modifier = Modifier.padding(10.dp)
-                            )
+                            item {
+                                Text(
+                                    text = "📄 1. UNIFIED AUTHENTICATION SERVICES",
+                                    color = AmberGold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Your gameplay profile, leaderboard ranking points, local hero card inventories, and Draughts Coins (BLC) are synced securely to Google Firebase databases.",
+                                    color = TextGray,
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                            item {
+                                Text(
+                                    text = "🔐 2. DATA CONSENT & PRIVACY",
+                                    color = AmberGold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "We collect your verified email, display profile name, and unique authentication UID. We never sell, rent, or distribute your email or game data to any third party.",
+                                    color = TextGray,
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                            item {
+                                Text(
+                                    text = "⚡ 3. COIN MIGRATION & RECOUPING",
+                                    color = AmberGold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "By creating an account, local guest coins are permanently merged and uploaded to your cloud ledger. Any duplicate guest profiles will be unified under your cloud identity.",
+                                    color = TextGray,
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                            item {
+                                Text(
+                                    text = "🛡️ 4. ANTI-TAMPERING & FAIR PLAY",
+                                    color = AmberGold,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Modifying SQLite local database footprints, manipulating memory, executing decompilation hacks, or spamming network packets will activate automatic app security bans. All operations are auditable.",
+                                    color = TextGray,
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
                         }
                     }
-                    Button(
-                        onClick = {
-                            viewModel.startGoogleSignIn(context) {
-                                viewModel.isGoogleAuthDialogOpen = false
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                        modifier = Modifier.fillMaxWidth().height(46.dp)
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("CONTINUE WITH GOOGLE", color = Color(0xFF1F1F1F), fontSize = 12.sp, fontWeight = FontWeight.Black)
+                        Checkbox(
+                            checked = termsCheckboxChecked,
+                            onCheckedChange = { termsCheckboxChecked = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = AmberGold,
+                                uncheckedColor = Color.Gray,
+                                checkmarkColor = DarkBg
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "I read and accept the Terms & Privacy Policy.",
+                            color = TextWhite,
+                            fontSize = 11.sp,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Button(
-                        onClick = { viewModel.isGoogleAuthDialogOpen = false },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                        border = BorderStroke(1.dp, Color.Gray),
-                        modifier = Modifier.fillMaxWidth().height(40.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("CANCEL", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = { 
+                                viewModel.showTermsOverlay = false
+                                viewModel.pendingAuthAction = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                            border = BorderStroke(1.dp, Color.Gray),
+                            modifier = Modifier.weight(1f).height(44.dp)
+                        ) {
+                            Text("BACK", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.isTermsAccepted = true
+                                viewModel.showTermsOverlay = false
+                                val action = viewModel.pendingAuthAction
+                                viewModel.pendingAuthAction = null
+                                action?.invoke()
+                            },
+                            enabled = termsCheckboxChecked,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AmberGold,
+                                disabledContainerColor = Color.Gray
+                            ),
+                            modifier = Modifier.weight(1f).height(44.dp)
+                        ) {
+                            Text("ACCEPT & PROCEED", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            } else {
+                // AUTH SELECTION & FORM VIEW (Google vs Email)
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Header / Title
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Shield,
+                            contentDescription = null,
+                            tint = Color(0xFF2979FF),
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Account Integration",
+                            color = Color.White,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // EMAIL AUTHENTICATION VIEW DIRECTLY
+                    Text(
+                        text = if (viewModel.isEmailRegisterMode) 
+                            "Create a new secure game account using your email address and a password." 
+                        else 
+                            "Sign in with your registered email and password to sync and load your profile.",
+                        color = TextGray,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Email Field
+                    OutlinedTextField(
+                        value = viewModel.emailInput,
+                        onValueChange = { viewModel.emailInput = it },
+                        label = { Text("Email Address", color = Color.Gray, fontSize = 11.sp) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF2979FF),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Password Field
+                    OutlinedTextField(
+                        value = viewModel.passwordInput,
+                        onValueChange = { viewModel.passwordInput = it },
+                        label = { Text("Password", color = Color.Gray, fontSize = 11.sp) },
+                        singleLine = true,
+                        visualTransformation = if (showPassword) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            TextButton(
+                                onClick = { showPassword = !showPassword },
+                                contentPadding = PaddingValues(horizontal = 8.dp)
+                            ) {
+                                Text(
+                                    text = if (showPassword) "HIDE" else "SHOW",
+                                    color = AmberGold,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF2979FF),
+                            unfocusedBorderColor = Color.Gray,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Mode Switch Row (Sign In vs Register)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (viewModel.isEmailRegisterMode) "Already have an account?" else "Don't have an account?",
+                            color = TextGray,
+                            fontSize = 11.sp
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        TextButton(
+                            onClick = { 
+                                viewModel.isEmailRegisterMode = !viewModel.isEmailRegisterMode
+                                viewModel.emailAuthError = null
+                            },
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text(
+                                text = if (viewModel.isEmailRegisterMode) "Sign In" else "Create Account",
+                                color = AmberGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    if (viewModel.isSigningInEmail) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(color = Color(0xFF2979FF), modifier = Modifier.size(36.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("Authenticating...", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        viewModel.emailAuthError?.let { err ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0x33FF5252)),
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                            ) {
+                                Text(
+                                    text = err,
+                                    color = Color(0xFFFFCDD2),
+                                    fontSize = 10.sp,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                val triggerLogin = {
+                                    viewModel.startEmailAuth(context) {
+                                        viewModel.isGoogleAuthDialogOpen = false
+                                    }
+                                }
+                                if (!viewModel.isTermsAccepted) {
+                                    viewModel.pendingAuthAction = triggerLogin
+                                    viewModel.showTermsOverlay = true
+                                } else {
+                                    triggerLogin()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2979FF)),
+                            modifier = Modifier.fillMaxWidth().height(46.dp)
+                        ) {
+                            Text(
+                                text = if (viewModel.isEmailRegisterMode) "CREATE SECURE ACCOUNT" else "AUTHENTICATE EMAIL",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = { viewModel.isGoogleAuthDialogOpen = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                            border = BorderStroke(1.dp, Color.Gray),
+                            modifier = Modifier.fillMaxWidth().height(40.dp)
+                        ) {
+                            Text("CANCEL", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    // DIAGNOSTICS & TRACE CONSOLE (shared by Google and Email auth flows)
+                    if (viewModel.googleSignInTraceLogs.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(20.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "DIAGNOSTICS & TRACE CONSOLE",
+                                color = AmberGold,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                            TextButton(
+                                onClick = {
+                                    val logText = viewModel.googleSignInTraceLogs.joinToString("\n")
+                                    clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(logText))
+                                    viewModel.triggerNotification("Trace logs copied to clipboard!")
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.height(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy entire log payload",
+                                    tint = AmberGold,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("COPY ALL LOGS", color = AmberGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF07090C)),
+                            border = BorderStroke(1.dp, Color(0x332979FF)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(130.dp)
+                        ) {
+                            androidx.compose.foundation.text.selection.SelectionContainer {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize().padding(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    items(viewModel.googleSignInTraceLogs) { logLine ->
+                                        val textColor = when {
+                                            logLine.startsWith("[FATAL]") || logLine.startsWith("[ERROR]") -> Color(0xFFFF5252)
+                                            logLine.contains("[SUCCESS]") -> Color(0xFF4CAF50)
+                                            logLine.startsWith("[TRACE]") -> Color(0xFFB0BEC5)
+                                            else -> Color(0xFF42A5F5)
+                                        }
+                                        Text(
+                                            text = logLine,
+                                            color = textColor,
+                                            fontSize = 9.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            lineHeight = 12.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

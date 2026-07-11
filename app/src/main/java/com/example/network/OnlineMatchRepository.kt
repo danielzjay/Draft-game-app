@@ -102,6 +102,30 @@ object OnlineMatchRepository {
         }
     }
 
+    /** Live list of all waiting players across all rules, for global presence notifications. */
+    fun observeAllWaitingPlayers(): Flow<List<QueueEntry>> {
+        val db = dbOrNull ?: return flowOf(emptyList())
+        val selfUid = currentUid()
+        return callbackFlow {
+            val reg = db.collection(QUEUE)
+                .addSnapshotListener { snap, _ ->
+                    val list = snap?.documents
+                        ?.filter { it.id != selfUid && it.getString("matchedMatchId") == null }
+                        ?.mapNotNull { doc ->
+                            QueueEntry(
+                                uid = doc.id,
+                                name = doc.getString("name") ?: "Player",
+                                mmr = doc.getLong("mmr")?.toInt() ?: 1000,
+                                ruleSystem = doc.getString("ruleSystem") ?: "AMERICAN_CHECKER_FEDERATION",
+                                joinedAt = doc.getLong("joinedAt") ?: 0L
+                            )
+                        } ?: emptyList()
+                    trySend(list)
+                }
+            awaitClose { reg.remove() }
+        }
+    }
+
     /** Directly pairs with a SPECIFIC waiting player picked from the list, instead of waiting on automatic matching. */
     suspend fun challengePlayer(opponent: QueueEntry, ruleSystem: String): String? {
         val db = dbOrNull ?: return null
