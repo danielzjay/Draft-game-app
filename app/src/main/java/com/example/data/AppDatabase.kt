@@ -12,7 +12,7 @@ import java.security.MessageDigest
 
 @Database(
     entities = [Hero::class, PlayerState::class, BlockchainBlock::class, LeaderboardEntry::class, BotMemoryEntry::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

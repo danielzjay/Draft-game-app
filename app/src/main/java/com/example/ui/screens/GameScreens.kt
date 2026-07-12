@@ -9,6 +9,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
@@ -45,6 +52,9 @@ import androidx.compose.ui.res.painterResource
 import com.example.R
 import com.example.data.*
 import com.example.ui.*
+import com.example.ui.DraughtsRuleSystem
+import com.example.audio.SoundManager
+import kotlinx.coroutines.launch
 import com.example.ui.components.HeroDrawing
 import com.example.ui.theme.*
 import java.text.SimpleDateFormat
@@ -150,6 +160,3211 @@ fun SplashScreenComponent(viewModel: GameViewModel) {
 }
 
 @Composable
+fun AppBackgroundWrapper(content: @Composable BoxScope.() -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF07070A))
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.img_splash_screen_1783691857912),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            alpha = 0.22f
+        )
+        // Radiant dark overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.5f),
+                            Color(0xFF07070A).copy(alpha = 0.95f)
+                        )
+                    )
+                )
+        )
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun SubScreenHeader(
+    title: String,
+    coins: Int,
+    onBackClick: () -> Unit
+) {
+    Surface(
+        color = Color(0x990F111A),
+        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(Color(0x33FFFFFF), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = AmberGold,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            
+            // Coin balance indicator in header
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0x33FFC107)),
+                border = BorderStroke(1.dp, AmberGold.copy(alpha = 0.5f)),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.padding(start = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Paid,
+                        contentDescription = "Coins",
+                        tint = AmberGold,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "$coins BLC",
+                        color = AmberGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MainMenuScreen(viewModel: GameViewModel) {
+    val playerState by viewModel.playerState.collectAsState()
+    val name = playerState?.playerName ?: "Grandmaster Checkers"
+    val lvl = playerState?.level ?: 1
+    val coins = playerState?.draughtCoins ?: 250
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Large Game Logo
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(vertical = 8.dp)
+        ) {
+            Text(
+                text = "DRAUGHTS COMBAT",
+                color = AmberGold,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 3.sp,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "TACTICAL ARENA PORTAL",
+                color = TextWhite.copy(alpha = 0.7f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.5.sp,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+        }
+
+        // Profile Card Hero
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.5.dp, AmberGold),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { viewModel.isProfileDialogOpen = true }
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val (avatarColor, avatarIcon) = when (viewModel.selectedAvatarId) {
+                    "knight" -> Pair(RedCrimson, Icons.Default.Shield)
+                    "mage" -> Pair(Color(0xFF9C27B0), Icons.Default.AutoAwesome)
+                    "valkyrie" -> Pair(Color(0xFF00E676), Icons.Default.LocalActivity)
+                    "assassin" -> Pair(Color(0xFFFF9100), Icons.Default.Security)
+                    "rogue" -> Pair(Color(0xFF2979FF), Icons.Default.Bolt)
+                    else -> Pair(RedCrimson, Icons.Default.Person)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(avatarColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        avatarIcon,
+                        contentDescription = "Avatar",
+                        tint = DarkBg,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = name,
+                        color = Color.White,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = "RANK TIER: ELITE III (Lv $lvl)",
+                        color = AmberGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "$coins",
+                        color = AmberGold,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        text = "BLC BAL",
+                        color = TextGray,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Primary Game Mode Options
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Offline Arena Card
+            MainMenuCard(
+                title = "OFFLINE ARENA",
+                subtitle = "Bots & Local 1v1",
+                icon = Icons.Default.SportsEsports,
+                iconColor = RedCrimson,
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.navigateTo(AppScreen.OFFLINE_MENU)
+            }
+
+            // Online Arena Card
+            MainMenuCard(
+                title = "PLAY ONLINE",
+                subtitle = "Matchmaking & Cups",
+                icon = Icons.Default.Public,
+                iconColor = Color(0xFF00E676),
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.navigateTo(AppScreen.ONLINE_MENU)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+    }
+}
+
+@Composable
+fun MainMenuCard(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+        border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+        shape = RoundedCornerShape(14.dp),
+        modifier = modifier
+            .height(130.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(iconColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Column {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp
+                )
+                Text(
+                    text = subtitle,
+                    color = TextGray,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun UtilityMenuRow(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = Color(0x880F111A)),
+        border = BorderStroke(1.dp, Color(0x16FFFFFF)),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(iconColor.copy(alpha = 0.12f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(20.dp))
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = TextGray, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+@Composable
+fun OfflineMenuScreen(viewModel: GameViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "CHOOSE OFFLINE COMBAT MODE",
+            color = AmberGold,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp,
+            modifier = Modifier.align(Alignment.Start)
+        )
+
+        // Bot Battle Option
+        MainMenuRow(
+            title = "🤖 BATTLE TACTICAL BOT",
+            subtitle = "Slay the local machine intelligence campaign",
+            borderColor = AmberGold.copy(alpha = 0.7f),
+            backgroundColor = Color(0xAA0F111A)
+        ) {
+            viewModel.changeGameMode(GameViewModel.SelectedGameMode.OFFLINE_VS_BOT)
+            viewModel.navigateTo(AppScreen.GAME_SETUP)
+        }
+
+        // Local 1v1 Option
+        MainMenuRow(
+            title = "🎮 LOCAL PASS & PLAY (1v1)",
+            subtitle = "Battle a friend side-by-side on one screen",
+            borderColor = RedCrimson.copy(alpha = 0.7f),
+            backgroundColor = Color(0xAA0F111A)
+        ) {
+            viewModel.changeGameMode(GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY)
+            viewModel.navigateTo(AppScreen.GAME_SETUP)
+        }
+
+        // Local Leaderboard Option
+        MainMenuRow(
+            title = "🏆 OFFLINE LEADERS & RANKS",
+            subtitle = "Check your current offline bot campaign ranks",
+            borderColor = Color(0xFF2979FF).copy(alpha = 0.7f),
+            backgroundColor = Color(0xAA0F111A)
+        ) {
+            viewModel.isOnlineRankingMode = false
+            viewModel.navigateTo(AppScreen.RANKING)
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+}
+
+@Composable
+fun MainMenuRow(
+    title: String,
+    subtitle: String,
+    borderColor: Color,
+    backgroundColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        border = BorderStroke(1.5.dp, borderColor),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+            Text(
+                title,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 0.5.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                subtitle,
+                color = TextGray,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal
+            )
+        }
+    }
+}
+
+@Composable
+fun OnlineMenuScreen(viewModel: GameViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text(
+            text = "CHOOSE ONLINE MULTIPLAYER MODE",
+            color = AmberGold,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp,
+            modifier = Modifier.align(Alignment.Start)
+        )
+
+        // Live 1v1 matchmaking option
+        MainMenuRow(
+            title = "⚔️ LIVE 1v1 MATCHMAKING",
+            subtitle = "Instant pairing with live human grandmasters online",
+            borderColor = Color(0xFF00E676).copy(alpha = 0.7f),
+            backgroundColor = Color(0xAA0F111A)
+        ) {
+            viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING)
+            viewModel.navigateTo(AppScreen.GAME_SETUP)
+        }
+
+        // Competitions Option
+        MainMenuRow(
+            title = "🏆 WORLD CUP TOURNAMENTS",
+            subtitle = "Structured tournament brackets & official leagues",
+            borderColor = AmberGold.copy(alpha = 0.7f),
+            backgroundColor = Color(0xAA0F111A)
+        ) {
+            viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITIONS)
+            viewModel.navigateTo(AppScreen.GAME_SETUP)
+        }
+
+        // Global Leaderboard Option
+        MainMenuRow(
+            title = "🎖️ GLOBAL GRANDMASTER RANKINGS",
+            subtitle = "See live players' global mmr ranking list",
+            borderColor = Color(0xFF9C27B0).copy(alpha = 0.7f),
+            backgroundColor = Color(0xAA0F111A)
+        ) {
+            viewModel.isOnlineRankingMode = true
+            viewModel.navigateTo(AppScreen.RANKING)
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+}
+
+@Composable
+fun GameSetupScreen(viewModel: GameViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var currentStep by remember { mutableStateOf(1) }
+    val gameMode = viewModel.selectedGameMode
+
+    // Fetch waiting players on online setup screen
+    LaunchedEffect(key1 = gameMode) {
+        if (gameMode == GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING) {
+            viewModel.startRealMatchmaking()
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Step Indicator Banner
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "TACTICAL BATTLE REGULATOR",
+                        color = AmberGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = if (currentStep == 1) "STEP 1: SELECT DRAUGHTS RULEBOOK" else "STEP 2: ENEMY & MATCH DETAILS",
+                        color = TextWhite,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                // Navigation buttons for steps
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { currentStep = 1 },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (currentStep == 1) AmberGold else DarkSurfaceVariant
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("Step 1", color = if (currentStep == 1) Color.Black else TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { currentStep = 2 },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (currentStep == 2) AmberGold else DarkSurfaceVariant
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("Step 2", color = if (currentStep == 2) Color.Black else TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        if (currentStep == 1) {
+            // STEP 1: Select Rule System
+            Text(
+                "SELECT DRAUGHTS COMPAT COMPACT RULES",
+                color = TextWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+
+            // Rules selection card list
+            DraughtsRuleSystem.values().forEach { rule ->
+                val isSelected = viewModel.ruleSystem == rule
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) AmberGold.copy(alpha = 0.15f) else Color(0xAA0F111A)
+                    ),
+                    border = BorderStroke(
+                        width = 1.5.dp,
+                        color = if (isSelected) AmberGold else Color(0x1AFFFFFF)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { 
+                            viewModel.ruleSystem = rule 
+                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                        }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = rule.displayName,
+                                color = if (isSelected) AmberGold else TextWhite,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Selected",
+                                    tint = AmberGold,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = when (rule) {
+                                DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION -> "Classic American checkers. Played on an 8x8 grid. Jumps are mandatory. promoted Kings move 1 step only (no flying)."
+                                DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION -> "Professional British rules on an 8x8 grid. Forces a standard opening sequence from the EDA 3-move opening database."
+                                DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION -> "International checkers on a massive 10x10 board! Promoted kings become 'Flying Kings' sliding diagonally across the full grid, with FMJD Majority Capture rule active."
+                            },
+                            color = TextGray,
+                            fontSize = 10.sp,
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { currentStep = 2 },
+                colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().height(48.dp)
+            ) {
+                Text("NEXT STEP: SET MATCH DETAILS", color = Color.Black, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+            }
+
+        } else {
+            // STEP 2: Custom details per game mode
+            when (gameMode) {
+                GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> {
+                    Text("🤖 OFFLINE BOT ENEMY REGULATIONS", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("SELECT BOT DIFFICULTY:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            
+                            // Difficulty selection chips
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                GameViewModel.BotDifficulty.values().forEach { diff ->
+                                    val isSelected = viewModel.currentBotPersona.difficulty == diff
+                                    Button(
+                                        onClick = {
+                                            val pool = viewModel.botPersonaPool.filter { it.difficulty == diff }
+                                            if (pool.isNotEmpty()) {
+                                                viewModel.currentBotPersona = pool.random()
+                                            }
+                                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isSelected) {
+                                                when (diff) {
+                                                    GameViewModel.BotDifficulty.EASY -> Color(0xFF00E676)
+                                                    GameViewModel.BotDifficulty.MEDIUM -> AmberGold
+                                                    GameViewModel.BotDifficulty.HARD -> RedCrimson
+                                                }
+                                            } else DarkSurfaceVariant
+                                        ),
+                                        modifier = Modifier.weight(1f).height(36.dp),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text(
+                                            text = diff.name,
+                                            color = if (isSelected) Color.Black else TextWhite,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            Divider(color = Color(0x1AFFFFFF))
+
+                            // Opponent Profile card
+                            Text("ASSIGNED MACHINE INTELLIGENCE:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0x33FFD700)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = viewModel.currentBotPersona.name.take(2).uppercase(),
+                                        color = AmberGold,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 16.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(viewModel.currentBotPersona.name.replace("_", " "), color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                    Text("MMR Rating: ${viewModel.currentBotPersona.baseMmr} | Diff: ${viewModel.currentBotPersona.difficulty}", color = TextGray, fontSize = 10.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            viewModel.navigateTo(AppScreen.GAME_BOT)
+                            viewModel.playSfx(SoundManager.Sfx.UNLOCK)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text("ENGAGE IN BOT BATTLE", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> {
+                    Text("🎮 PASS & PLAY PLAYER ENLISTMENT", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            // Player 1 input
+                            OutlinedTextField(
+                                value = viewModel.localPlayer1Name,
+                                onValueChange = { viewModel.localPlayer1Name = it },
+                                label = { Text("Player 1 Name (Red Vanguard)", color = AmberGold, fontSize = 10.sp) },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = RedCrimson) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = RedCrimson,
+                                    unfocusedBorderColor = Color(0x33FFFFFF),
+                                    focusedTextColor = TextWhite,
+                                    unfocusedTextColor = TextWhite
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+
+                            // Player 2 input
+                            OutlinedTextField(
+                                value = viewModel.localPlayer2Name,
+                                onValueChange = { viewModel.localPlayer2Name = it },
+                                label = { Text("Player 2 Name (Purple Shadow)", color = AmberGold, fontSize = 10.sp) },
+                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = VioletNeon) },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = VioletNeon,
+                                    unfocusedBorderColor = Color(0x33FFFFFF),
+                                    focusedTextColor = TextWhite,
+                                    unfocusedTextColor = TextWhite
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(
+                        onClick = {
+                            viewModel.navigateTo(AppScreen.GAME_LOCAL_PVP)
+                            viewModel.playSfx(SoundManager.Sfx.UNLOCK)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text("ENGAGE LOCAL PASS & PLAY", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    }
+                }
+
+                GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING, GameViewModel.SelectedGameMode.COMPETITIONS -> {
+                    Text("⚔️ ONLINE LOBBY & WAITING PLAYERS", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("PLAYERS CURRENTLY WAITING:", color = AmberGold, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                                Text("${viewModel.waitingPlayers.size} Active", color = Color(0xFF00E676), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+
+                            if (viewModel.waitingPlayers.isEmpty()) {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color(0x1AFFFFFF)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "No players are currently waiting in the lobby for ${viewModel.ruleSystem.name.replace("_", " ")}. Click the 'RANDOM MATCHMAKING' button below to host a room and wait for others!",
+                                        color = TextGray,
+                                        fontSize = 11.sp,
+                                        modifier = Modifier.padding(12.dp),
+                                        lineHeight = 15.sp
+                                    )
+                                }
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    viewModel.waitingPlayers.forEach { op ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(Color(0x22FFFFFF), RoundedCornerShape(8.dp))
+                                                .padding(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(32.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(0x1A00E676)),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF00E676), modifier = Modifier.size(16.dp))
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Column {
+                                                    Text(op.name, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                    Text("Rating: ${op.mmr} MMR | ${op.ruleSystem.replace("_", " ")}", color = TextGray, fontSize = 9.sp)
+                                                }
+                                            }
+                                            Button(
+                                                onClick = {
+                                                    viewModel.challengeWaitingPlayer(op)
+                                                    viewModel.navigateTo(AppScreen.GAME_ONLINE_PVP)
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                                                contentPadding = PaddingValues(horizontal = 10.dp),
+                                                modifier = Modifier.height(26.dp)
+                                            ) {
+                                                Text("CHALLENGE", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Main matchmaking search button
+                    Button(
+                        onClick = {
+                            viewModel.navigateTo(AppScreen.GAME_ONLINE_PVP)
+                            viewModel.playSfx(SoundManager.Sfx.UNLOCK)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text("HOST ROOM / FIND RANDOM MATCH", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.Public, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OfflineBotGameScreen(viewModel: GameViewModel) {
+    val state by viewModel.playerState.collectAsState()
+    val activeSkin = state?.selectedSkin ?: "classic"
+    val activeBoardStyle = state?.selectedBoardStyle ?: "classic"
+    val bot = viewModel.currentBotPersona
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Active Bot info banner
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.2.dp, AmberGold.copy(alpha = 0.5f)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x1AFFC107)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.SmartToy, contentDescription = null, tint = AmberGold, modifier = Modifier.size(20.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "VS BOT: ${bot.name}",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = "Difficulty: ${bot.difficulty} • Bot MMR: ${bot.baseMmr}",
+                        color = TextGray,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Button(
+                    onClick = { viewModel.rollNewBotPersona() },
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                    modifier = Modifier.height(28.dp)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, tint = AmberGold, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Change Bot", color = AmberGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Captured Pieces (Shadow's Graveyard / Purple casualties)
+        CapturedPiecesRow(
+            title = "Shadow Graveyard",
+            pieces = viewModel.capturedPieces.filter { !it.isRed },
+            allianceColor = VioletNeon,
+            tag = "shadow_graveyard"
+        )
+
+        // Checkers Board
+        CheckersBoardComponent(viewModel, activeSkin, activeBoardStyle)
+
+        // Captured Pieces (Vanguard's Graveyard / Red casualties)
+        CapturedPiecesRow(
+            title = "Vanguard Graveyard",
+            pieces = viewModel.capturedPieces.filter { it.isRed },
+            allianceColor = RedCrimson,
+            tag = "vanguard_graveyard"
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Selected Piece Details HUD
+        SelectedPieceHUD(viewModel)
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Actions
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                onClick = { viewModel.resetGame() },
+                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.RestartAlt, contentDescription = "Reset", modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Reset Board", fontSize = 11.sp)
+            }
+
+            Button(
+                onClick = { viewModel.navigateTo(AppScreen.STORE) },
+                colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Storefront, contentDescription = "Store", modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Store", fontSize = 11.sp)
+            }
+        }
+
+        // Victory banner
+        VictoryBannerHUD(viewModel)
+    }
+}
+
+@Composable
+fun SelectedPieceHUD(viewModel: GameViewModel) {
+    AnimatedVisibility(
+        visible = viewModel.selectedPiece != null,
+        enter = expandVertically() + fadeIn(),
+        exit = shrinkVertically() + fadeOut()
+    ) {
+        viewModel.selectedPiece?.let { piece ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                border = BorderStroke(1.dp, if (piece.isRed) RedCrimson.copy(alpha = 0.5f) else VioletNeon.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(DarkSurfaceVariant)
+                                    .padding(4.dp)
+                            ) {
+                                HeroDrawing(heroId = piece.heroId, isRed = piece.isRed)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = piece.name,
+                                    color = TextWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Lv ${piece.level} ${piece.heroClass}${if (piece.isKing) " (PROMOTED CROWN HERO)" else ""}",
+                                    color = if (piece.isRed) AmberGold else VioletNeon,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+
+                        // HP gauge
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "HP: ${piece.hp}/${piece.maxHp}",
+                                color = HealthGreen,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(70.dp)
+                                    .height(6.dp)
+                                    .background(Color.DarkGray, RoundedCornerShape(3.dp))
+                            ) {
+                                val percent = (piece.hp.toFloat() / piece.maxHp).coerceIn(0f, 1f)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(percent)
+                                        .background(HealthGreen, RoundedCornerShape(3.dp))
+                                )
+                            }
+                        }
+                    }
+
+                    Divider(color = Color(0x11FFFFFF), modifier = Modifier.padding(vertical = 8.dp))
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.FlashOn, contentDescription = "ATK", tint = RedCrimson, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ATK: ${piece.atk}", color = TextWhite, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Shield, contentDescription = "DEF", tint = Color(0xFF29B6F6), modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("DEF: ${piece.def}", color = TextWhite, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = "Ability", tint = AmberGold, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(piece.abilityName, color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = piece.abilityDescription,
+                        color = TextGray,
+                        fontSize = 11.sp,
+                        style = TextStyle(lineHeight = 14.sp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun VictoryBannerHUD(viewModel: GameViewModel) {
+    viewModel.winnerMessage?.let { winnerMsg ->
+        Spacer(modifier = Modifier.height(12.dp))
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(2.dp, AmberGold),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(Icons.Default.EmojiEvents, contentDescription = "Victory Trophy", tint = AmberGold, modifier = Modifier.size(48.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    winnerMsg,
+                    color = AmberGold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Black,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "You've been rewarded with 75 BLC and 150 User XP!",
+                    color = TextWhite,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { viewModel.resetGame() },
+                    colors = ButtonDefaults.buttonColors(containerColor = AmberGold)
+                ) {
+                    Text("New Match", color = DarkBg, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun OfflineLocalGameScreen(viewModel: GameViewModel) {
+    val state by viewModel.playerState.collectAsState()
+    val activeSkin = state?.selectedSkin ?: "classic"
+    val activeBoardStyle = state?.selectedBoardStyle ?: "classic"
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        // Mode Banner
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.2.dp, RedCrimson.copy(alpha = 0.5f)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x1AFF1744)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.SportsEsports, contentDescription = null, tint = RedCrimson, modifier = Modifier.size(20.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = "LOCAL ARENA: PASS & PLAY",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = "Play 1v1 on this same device. Switch sides after each turn.",
+                        color = TextGray,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        // Captured Pieces (Shadow's Graveyard / Purple casualties)
+        CapturedPiecesRow(
+            title = "Shadow Graveyard",
+            pieces = viewModel.capturedPieces.filter { !it.isRed },
+            allianceColor = VioletNeon,
+            tag = "shadow_graveyard"
+        )
+
+        // Checkers Board
+        CheckersBoardComponent(viewModel, activeSkin, activeBoardStyle)
+
+        // Captured Pieces (Vanguard's Graveyard / Red casualties)
+        CapturedPiecesRow(
+            title = "Vanguard Graveyard",
+            pieces = viewModel.capturedPieces.filter { it.isRed },
+            allianceColor = RedCrimson,
+            tag = "vanguard_graveyard"
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Selected Piece Details HUD
+        SelectedPieceHUD(viewModel)
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Reset Board Action
+        Button(
+            onClick = { viewModel.resetGame() },
+            colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.RestartAlt, contentDescription = "Reset", modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Reset Local Board", fontSize = 12.sp)
+        }
+
+        // Victory banner
+        VictoryBannerHUD(viewModel)
+    }
+}
+
+@Composable
+fun OnlinePvPGameScreen(viewModel: GameViewModel) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        RealOnlineMatchScreen(viewModel)
+    }
+}
+
+@Composable
+fun OnlineCompetitionsScreen(viewModel: GameViewModel) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        TournamentBrowserScreen(viewModel, null)
+    }
+}
+
+@Composable
+fun WalletsScreen(viewModel: GameViewModel) {
+    val playerState by viewModel.playerState.collectAsState()
+    val coins = playerState?.draughtCoins ?: 250
+    val isPremium = viewModel.isPremiumUser
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Coin Wallet Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.5.dp, AmberGold),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Paid,
+                    contentDescription = "Wallet Balance",
+                    tint = AmberGold,
+                    modifier = Modifier.size(56.dp)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "TOTAL DRAUGHT COIN BALANCE",
+                    color = TextGray,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "$coins BLC",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(vertical = 4.dp)
+                )
+                Text(
+                    text = "100% Secure Cryptographic Ledger Balance",
+                    color = Color(0xFF00E676),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = { viewModel.isPaymentPortalOpen = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = DarkBg, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Top Up Coins", color = DarkBg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+
+                    Button(
+                        onClick = { viewModel.triggerNotification("Cryptographic transfer logic requires a linked Google wallet.") },
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, tint = AmberGold, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Send BLC", color = AmberGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        // Membership Card Card
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, if (isPremium) AmberGold else Color(0x33FFFFFF)),
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Stars,
+                            contentDescription = null,
+                            tint = if (isPremium) AmberGold else Color.Gray,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "PREMIUM MEMBERSHIP STATUS",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                    if (isPremium) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0x33FFC107)),
+                            border = BorderStroke(0.5.dp, AmberGold)
+                        ) {
+                            Text(
+                                "ACTIVE GOLD",
+                                color = AmberGold,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    } else {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0x16FFFFFF)),
+                            border = BorderStroke(0.5.dp, Color.Gray)
+                        ) {
+                            Text(
+                                "INACTIVE",
+                                color = Color.Gray,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Black,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = if (isPremium) "Congratulations! You have unlocked unlimited online tournament entries, all visual board designs, double XP rewards, and ad-free priority match lobbies!" else "Unlock professional tournament access, rare champion tokens, double daily coin rewards, and ad-free lobbies.",
+                    color = TextGray,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp
+                )
+
+                if (!isPremium) {
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Button(
+                        onClick = { viewModel.isPaymentPortalOpen = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Get Premium Gold Upgrade", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        // Ledger List Header
+        Text(
+            text = "RECENT LEDGER TRANSACTIONS",
+            color = AmberGold,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp
+        )
+
+        // Ledger list (mock/real ledger statements)
+        val ledger = listOf(
+            Triple("Daily Login Reward", "+50 BLC", "SUCCESS"),
+            Triple("Premium Gold Upgrade Attempt", "0 BLC", "PENDING_OAUTH"),
+            Triple("Campaign Bot Defeated (Bronze Bot)", "+75 BLC", "SUCCESS"),
+            Triple("Skin Store: Dark Forest Board Purchase", "-120 BLC", "SUCCESS")
+        )
+
+        ledger.forEach { (title, amt, status) ->
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0x66000000)),
+                border = BorderStroke(1.dp, Color(0x11FFFFFF)),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column {
+                        Text(title, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(status, color = if (status == "SUCCESS") Color(0xFF00E676) else AmberGold, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                    }
+                    Text(
+                        amt,
+                        color = if (amt.startsWith("+")) Color(0xFF00E676) else RedCrimson,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StoreScreenWrapper(viewModel: GameViewModel) {
+    StoreScreen(viewModel)
+}
+
+@Composable
+fun RankingsScreen(viewModel: GameViewModel) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Toggle rank type info banner
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, if (viewModel.isOnlineRankingMode) Color(0xFF00E676).copy(alpha = 0.5f) else Color(0xFF2979FF).copy(alpha = 0.5f)),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.padding(16.dp).fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (viewModel.isOnlineRankingMode) Icons.Default.Public else Icons.Default.Leaderboard,
+                    contentDescription = null,
+                    tint = if (viewModel.isOnlineRankingMode) Color(0xFF00E676) else Color(0xFF2979FF),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (viewModel.isOnlineRankingMode) "GLOBAL ONLINE GRANDMASTERS" else "LOCAL OFFLINE CAMPAIGN RANKS",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        text = if (viewModel.isOnlineRankingMode) "Live global server stats. Updates dynamically." else "Local campaign high scores and bot training levels.",
+                        color = TextGray,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Box(modifier = Modifier.weight(1f)) {
+            // Render the existing beautifully optimized LeaderboardScreen
+            LeaderboardScreen(viewModel)
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(viewModel: GameViewModel) {
+    val playerState by viewModel.playerState.collectAsState()
+    val name = playerState?.playerName ?: "Grandmaster Checkers"
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Section 1: Profile Name editor
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "PLAYER DESIGNATION",
+                    color = AmberGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                var tempName by remember { mutableStateOf(name) }
+                OutlinedTextField(
+                    value = tempName,
+                    onValueChange = { tempName = it },
+                    label = { Text("Display Name") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AmberGold,
+                        unfocusedBorderColor = Color.DarkGray
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = {
+                        if (tempName.isNotBlank()) {
+                            viewModel.updatePlayerName(tempName.trim())
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Save Name", color = DarkBg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                }
+            }
+        }
+
+        // Section 2: Account sync
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "CLOUD ACCOUNT SYNCHRONIZATION",
+                    color = AmberGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = if (viewModel.isGoogleSignedIn) "Your progression is securely backed up online to ${viewModel.signedInEmail ?: "your Google account"}." else "You are currently playing as a local Guest. Link your Google account to back up progression and participate in matchmaking.",
+                    color = TextGray,
+                    fontSize = 11.sp,
+                    lineHeight = 14.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (viewModel.isGoogleSignedIn) {
+                    Button(
+                        onClick = { viewModel.googleSignOut(context) },
+                        colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Unlink & Sign Out", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                } else {
+                    Button(
+                        onClick = { viewModel.isGoogleAuthDialogOpen = true },
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Login, contentDescription = null, tint = DarkBg, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Link Google Account", color = DarkBg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        // Section 3: Official Draughts Rulebook Selector
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "OFFICIAL DRAUGHTS RULEBOOK SELECTOR",
+                    color = AmberGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Select an official rulebook. The board layout, piece counts, and move directions dynamically adjust to match international federation regulations.",
+                    color = TextGray,
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val rulebooks = listOf(
+                    Triple(DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION, "ACF (8x8)", "American ACF"),
+                    Triple(DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION, "EDA (8x8)", "English EDA"),
+                    Triple(DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION, "FMJD (10x10)", "World FMJD")
+                )
+                rulebooks.forEach { (system, abbrev, desc) ->
+                    val isSelected = viewModel.ruleSystem == system
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.selectRuleSystem(system) }
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = isSelected,
+                            onClick = { viewModel.selectRuleSystem(system) },
+                            colors = RadioButtonDefaults.colors(selectedColor = AmberGold)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(abbrev, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(desc, color = TextGray, fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section 4: RPG Regulations & Switches
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "CUSTOM COMBAT SETTINGS",
+                    color = AmberGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Combat Switch
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("RPG Combat Draughts Mode", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Enables stats, unique skills, and visual collision skirmishes when jumping pieces.", color = TextGray, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = viewModel.ruleCombatDraughts,
+                        onCheckedChange = { viewModel.ruleCombatDraughts = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = AmberGold, checkedTrackColor = AmberGold.copy(alpha = 0.4f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Forced Jumps Switch
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Forced Jumps Rule", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Traditional checkers rule where players must execute jump captures if available.", color = TextGray, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = viewModel.ruleForcedJumps,
+                        onCheckedChange = { viewModel.ruleForcedJumps = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = AmberGold, checkedTrackColor = AmberGold.copy(alpha = 0.4f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Flying Kings Switch
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Flying (Sliding) Kings Rule", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Kings can fly diagonally across multiple empty tiles and capture distant pieces.", color = TextGray, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = viewModel.ruleFlyingKings,
+                        onCheckedChange = { viewModel.ruleFlyingKings = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = AmberGold, checkedTrackColor = AmberGold.copy(alpha = 0.4f))
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+    }
+}
+
+@Composable
+fun MusicSettingsScreen(viewModel: GameViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val customSongPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris: List<android.net.Uri>? ->
+        if (!uris.isNullOrEmpty()) {
+            viewModel.setCustomMusicPlaylist(context, uris)
+        }
+    }
+
+    val singleSongPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {}
+            val displayName = queryFileDisplayName(context, uri) ?: "Custom Track"
+            viewModel.setCustomMusicTrack(context, uri, displayName)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // HEADER: Remixed Studio Console Display
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xDD0C0E17)),
+            border = BorderStroke(1.dp, Color(0xFF00E676).copy(alpha = 0.4f)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = Color(0xFF00E676),
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "ORCHESTRA DJ REMIX STUDIO",
+                        color = Color(0xFF00E676),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.5.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (com.example.audio.AutoDJEngine.isTransitioning) {
+                        "MIXING ACTIVE: transitioning with ${com.example.audio.AutoDJEngine.crossfadeCurveType.name} curve"
+                    } else {
+                        "DECK ${if (com.example.audio.AutoDJEngine.currentDeck == 0) "A" else "B"} ONLINE • SYNC ENGINE ARMED"
+                    },
+                    color = TextWhite.copy(alpha = 0.7f),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // CARD 1: Dual-Deck DJ Console
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // DECK A (Left Deck)
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (com.example.audio.AutoDJEngine.currentDeck == 0) Color(0xAA131722) else Color(0x770F111A)
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    if (com.example.audio.AutoDJEngine.currentDeck == 0) Color(0xFF00E676) else Color(0x33FFFFFF)
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("DECK A", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (com.example.audio.AutoDJEngine.currentDeck == 0) Color(0xFF00E676) else Color(0x44FFFFFF)
+                                )
+                        )
+                    }
+
+                    // Spinning Vinyl Graphic
+                    val isDeckAPlaying = (com.example.audio.AutoDJEngine.currentDeck == 0 && !com.example.audio.AutoDJEngine.isTransitioning) ||
+                            (com.example.audio.AutoDJEngine.isTransitioning && com.example.audio.AutoDJEngine.crossfaderPosition < 0.5f)
+                    RotatingVinylDisc(isPlaying = isDeckAPlaying)
+
+                    Text(
+                        text = com.example.audio.AutoDJEngine.deckATrackName,
+                        color = TextWhite,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = String.format("%.1f BPM", com.example.audio.AutoDJEngine.deckABpm),
+                        color = Color(0xFF00E676),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Nudge controls row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button(
+                            onClick = { com.example.audio.AutoDJEngine.nudgePitch(0, false) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x22FFFFFF)),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.weight(1f).height(24.dp)
+                        ) {
+                            Text("NUDGE -", color = TextWhite, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { com.example.audio.AutoDJEngine.nudgePitch(0, true) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x22FFFFFF)),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.weight(1f).height(24.dp)
+                        ) {
+                            Text("NUDGE +", color = TextWhite, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (com.example.audio.AutoDJEngine.deckAPitchShift != 0f) {
+                        Text(
+                            text = String.format("Nudge: %+.1f%%", com.example.audio.AutoDJEngine.deckAPitchShift * 100),
+                            color = AmberGold,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Action buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button(
+                            onClick = { com.example.audio.AutoDJEngine.triggerScratchEffect() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x1A00E676)),
+                            border = BorderStroke(0.5.dp, Color(0xFF00E676)),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.weight(1f).height(26.dp)
+                        ) {
+                            Text("SCRATCH", color = Color(0xFF00E676), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { com.example.audio.AutoDJEngine.syncTempos() },
+                            colors = ButtonDefaults.buttonColors(containerColor = AmberGold.copy(alpha = 0.1f)),
+                            border = BorderStroke(0.5.dp, AmberGold),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.weight(1f).height(26.dp)
+                        ) {
+                            Text("SYNC BPM", color = AmberGold, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            // DECK B (Right Deck)
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (com.example.audio.AutoDJEngine.currentDeck == 1) Color(0xAA131722) else Color(0x770F111A)
+                ),
+                border = BorderStroke(
+                    1.dp,
+                    if (com.example.audio.AutoDJEngine.currentDeck == 1) Color(0xFF00E676) else Color(0x33FFFFFF)
+                ),
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("DECK B", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (com.example.audio.AutoDJEngine.currentDeck == 1) Color(0xFF00E676) else Color(0x44FFFFFF)
+                                )
+                        )
+                    }
+
+                    // Spinning Vinyl Graphic
+                    val isDeckBPlaying = (com.example.audio.AutoDJEngine.currentDeck == 1 && !com.example.audio.AutoDJEngine.isTransitioning) ||
+                            (com.example.audio.AutoDJEngine.isTransitioning && com.example.audio.AutoDJEngine.crossfaderPosition > -0.5f)
+                    RotatingVinylDisc(isPlaying = isDeckBPlaying)
+
+                    Text(
+                        text = com.example.audio.AutoDJEngine.deckBTrackName,
+                        color = TextWhite,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = String.format("%.1f BPM", com.example.audio.AutoDJEngine.deckBBpm),
+                        color = Color(0xFF00E676),
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Nudge controls row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button(
+                            onClick = { com.example.audio.AutoDJEngine.nudgePitch(1, false) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x22FFFFFF)),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.weight(1f).height(24.dp)
+                        ) {
+                            Text("NUDGE -", color = TextWhite, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { com.example.audio.AutoDJEngine.nudgePitch(1, true) },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x22FFFFFF)),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.weight(1f).height(24.dp)
+                        ) {
+                            Text("NUDGE +", color = TextWhite, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    if (com.example.audio.AutoDJEngine.deckBPitchShift != 0f) {
+                        Text(
+                            text = String.format("Nudge: %+.1f%%", com.example.audio.AutoDJEngine.deckBPitchShift * 100),
+                            color = AmberGold,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    // Action buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Button(
+                            onClick = { com.example.audio.AutoDJEngine.triggerScratchEffect() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x1A00E676)),
+                            border = BorderStroke(0.5.dp, Color(0xFF00E676)),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.weight(1f).height(26.dp)
+                        ) {
+                            Text("SCRATCH", color = Color(0xFF00E676), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { com.example.audio.AutoDJEngine.syncTempos() },
+                            colors = ButtonDefaults.buttonColors(containerColor = AmberGold.copy(alpha = 0.1f)),
+                            border = BorderStroke(0.5.dp, AmberGold),
+                            contentPadding = PaddingValues(0.dp),
+                            modifier = Modifier.weight(1f).height(26.dp)
+                        ) {
+                            Text("SYNC BPM", color = AmberGold, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
+        // PHYSICAL MIXER: Crossfader Panel
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("DECK A (L)", color = TextGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("PHYSICAL CROSSFADER BLEND", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                    Text("DECK B (R)", color = TextGray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Slider(
+                    value = com.example.audio.AutoDJEngine.crossfaderPosition,
+                    onValueChange = { com.example.audio.AutoDJEngine.updateCrossfader(it) },
+                    valueRange = -1.0f..1.0f,
+                    colors = SliderDefaults.colors(
+                        thumbColor = Color(0xFF00E676),
+                        activeTrackColor = Color(0xFF00E676).copy(alpha = 0.5f),
+                        inactiveTrackColor = Color(0xFF1F2232)
+                    )
+                )
+
+                // Blend label details
+                val percentA = ((1.0f - com.example.audio.AutoDJEngine.crossfaderPosition) / 2.0f * 100).toInt()
+                val percentB = 100 - percentA
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Blend: $percentA% A", color = if (percentA > 50) Color(0xFF00E676) else TextWhite, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                    Text("Blend: $percentB% B", color = if (percentB > 50) Color(0xFF00E676) else TextWhite, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                }
+
+                Divider(color = Color(0x1AFFFFFF))
+
+                // MANUAL BASS SWAP EQ TACTILE CUT
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Simulated Bass Swap (EQ Low-Cut)", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Instantly swaps bass-frequency dominance to maintain extreme audio clarity.", color = TextGray, fontSize = 9.sp)
+                    }
+                    Switch(
+                        checked = com.example.audio.AutoDJEngine.bassSwapActive,
+                        onCheckedChange = { com.example.audio.AutoDJEngine.bassSwapActive = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color(0xFF00E676),
+                            checkedTrackColor = Color(0x4D00E676)
+                        )
+                    )
+                }
+            }
+        }
+
+        // CARD 2: Transitions & Mixing Setup
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x2200E676)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "AUTOMATIC TRANSITION CONFIGURATION",
+                    color = AmberGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black
+                )
+
+                // Auto Mix Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Continuous Auto-Mix Queue", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Detects song end and automatically triggers seamless crossfade mixing.", color = TextGray, fontSize = 9.sp)
+                    }
+                    Switch(
+                        checked = com.example.audio.AutoDJEngine.autoMixEnabled,
+                        onCheckedChange = { com.example.audio.AutoDJEngine.autoMixEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color(0xFF00E676),
+                            checkedTrackColor = Color(0x4D00E676)
+                        )
+                    )
+                }
+
+                // BPM Sync Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Auto BPM Beat-Sync Mode", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("Matches playback speed/tempo perfectly during transition, then slurs back.", color = TextGray, fontSize = 9.sp)
+                    }
+                    Switch(
+                        checked = com.example.audio.AutoDJEngine.syncModeEnabled,
+                        onCheckedChange = { com.example.audio.AutoDJEngine.syncModeEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color(0xFF00E676),
+                            checkedTrackColor = Color(0x4D00E676)
+                        )
+                    )
+                }
+
+                Divider(color = Color(0x1AFFFFFF))
+
+                // Transition curve type selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Crossfade Curve Type:", color = TextWhite, fontSize = 11.sp)
+                    var expandedCurveDropdown by remember { mutableStateOf(false) }
+                    Box {
+                        Button(
+                            onClick = { expandedCurveDropdown = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                            contentPadding = PaddingValues(horizontal = 10.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Text(com.example.audio.AutoDJEngine.crossfadeCurveType.name, color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AmberGold, modifier = Modifier.size(16.dp))
+                        }
+                        DropdownMenu(
+                            expanded = expandedCurveDropdown,
+                            onDismissRequest = { expandedCurveDropdown = false },
+                            modifier = Modifier.background(DarkSurface)
+                        ) {
+                            com.example.audio.AutoDJEngine.CurveType.entries.forEach { curve ->
+                                DropdownMenuItem(
+                                    text = { Text(curve.name, color = TextWhite, fontSize = 12.sp) },
+                                    onClick = {
+                                        com.example.audio.AutoDJEngine.crossfadeCurveType = curve
+                                        expandedCurveDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Transition Duration Slider
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Crossfade Transition Time:", color = TextWhite, fontSize = 11.sp)
+                        Text(
+                            text = String.format("%.0fs", com.example.audio.AutoDJEngine.transitionDurationSeconds),
+                            color = AmberGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Slider(
+                        value = com.example.audio.AutoDJEngine.transitionDurationSeconds,
+                        onValueChange = { com.example.audio.AutoDJEngine.transitionDurationSeconds = it },
+                        valueRange = 3.0f..20.0f,
+                        colors = SliderDefaults.colors(thumbColor = AmberGold, activeTrackColor = AmberGold)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Giant Trigger seamless remix button
+                Button(
+                    onClick = { com.example.audio.AutoDJEngine.triggerManualTransition() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                    enabled = !com.example.audio.AutoDJEngine.isTransitioning,
+                    modifier = Modifier.fillMaxWidth().height(42.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = null,
+                        tint = DarkBg,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        "TRIGGER AUTO-MIX REMIX SEAMLESSLY",
+                        color = DarkBg,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
+                }
+            }
+        }
+
+        // PLAYLIST & MUSIC SOURCE LOADER
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "MUSIC STORAGE & PLAYLIST QUEUE",
+                        color = AmberGold,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Button(
+                        onClick = { customSongPicker.launch(arrayOf("audio/*")) },
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold.copy(alpha = 0.15f)),
+                        border = BorderStroke(1.dp, AmberGold),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = AmberGold, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Load Songs", color = AmberGold, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Dropdown to select bundled tracks or upload single song
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Select Active Symphony:", color = TextWhite, fontSize = 12.sp)
+                    var expandedMusicDropdown by remember { mutableStateOf(false) }
+                    Box {
+                        Button(
+                            onClick = { expandedMusicDropdown = true },
+                            colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                            contentPadding = PaddingValues(horizontal = 10.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Text(viewModel.selectedMusicTrack, color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AmberGold, modifier = Modifier.size(16.dp))
+                        }
+                        DropdownMenu(
+                            expanded = expandedMusicDropdown,
+                            onDismissRequest = { expandedMusicDropdown = false },
+                            modifier = Modifier.background(DarkSurface)
+                        ) {
+                            viewModel.bundledMusicTracks.forEach { track ->
+                                DropdownMenuItem(
+                                    text = { Text(track.displayName, color = TextWhite, fontSize = 12.sp) },
+                                    onClick = {
+                                        viewModel.changeMusicTrack(track)
+                                        expandedMusicDropdown = false
+                                    }
+                                )
+                            }
+                            Divider(color = Color(0x1AFFFFFF))
+                            DropdownMenuItem(
+                                text = { Text("📁 Upload Single Song...", color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                                onClick = {
+                                    expandedMusicDropdown = false
+                                    singleSongPicker.launch(arrayOf("audio/*"))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("🎵 Upload Multiple Songs...", color = Color(0xFF00E676), fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                                onClick = {
+                                    expandedMusicDropdown = false
+                                    customSongPicker.launch(arrayOf("audio/*"))
+                                }
+                            )
+                        }
+                    }
+                }
+
+                if (viewModel.customMusicPlaylistUris.isNotEmpty()) {
+                    Text("PLAYLIST QUEUE:", color = TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0x33000000)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            viewModel.customMusicPlaylistNames.forEachIndexed { idx, name ->
+                                val isCurrentTrackPlaying = com.example.audio.AutoDJEngine.deckATrackName == name ||
+                                        com.example.audio.AutoDJEngine.deckBTrackName == name
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = if (isCurrentTrackPlaying) Icons.Default.VolumeUp else Icons.Default.MusicNote,
+                                        contentDescription = null,
+                                        tint = if (isCurrentTrackPlaying) Color(0xFF00E676) else TextGray,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "${idx + 1}. $name",
+                                        color = if (isCurrentTrackPlaying) Color(0xFF00E676) else TextWhite,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    if (isCurrentTrackPlaying) {
+                                        Text("Playing", color = Color(0xFF00E676), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        "No custom songs in playlist queue. Upload multiple tracks above to enable continuous back-to-back playback.",
+                        color = TextGray,
+                        fontSize = 10.sp
+                    )
+                }
+            }
+        }
+
+        // VOLUME & SYMPHONY EQUALIZER CARD
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "VOLUME SYMPHONY CONTROLS",
+                    color = AmberGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                // Music Volume
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.MusicNote, contentDescription = null, tint = AmberGold, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Music Track:", color = TextWhite, fontSize = 11.sp, modifier = Modifier.width(100.dp))
+                    Slider(
+                        value = viewModel.musicVolume,
+                        onValueChange = { viewModel.musicVolume = it },
+                        colors = SliderDefaults.colors(thumbColor = AmberGold, activeTrackColor = AmberGold),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("${(viewModel.musicVolume * 100).toInt()}%", color = TextWhite, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
+
+                // SFX Volume
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.VolumeUp, contentDescription = null, tint = AmberGold, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sound SFX:", color = TextWhite, fontSize = 11.sp, modifier = Modifier.width(100.dp))
+                    Slider(
+                        value = viewModel.soundVolume,
+                        onValueChange = { viewModel.soundVolume = it },
+                        colors = SliderDefaults.colors(thumbColor = AmberGold, activeTrackColor = AmberGold),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("${(viewModel.soundVolume * 100).toInt()}%", color = TextWhite, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Equalizer Visualizer Bars!
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(24.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    repeat(16) { index ->
+                        val infiniteTransition = rememberInfiniteTransition(label = "music_equalizer")
+                        val heightAnim by infiniteTransition.animateFloat(
+                            initialValue = 0.1f,
+                            targetValue = 1.0f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(durationMillis = 350 + (index * 60), easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "height"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 2.dp)
+                                .width(5.dp)
+                                .fillMaxHeight(heightAnim * viewModel.musicVolume)
+                                .background(if (index % 2 == 0) AmberGold else RedCrimson)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun RotatingVinylDisc(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "vinyl_rotation")
+    val rotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "rotation"
+    )
+
+    val currentRotation = if (isPlaying) rotation else 0f
+
+    androidx.compose.foundation.Canvas(modifier = modifier.size(72.dp)) {
+        val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
+        val radius = size.minDimension / 2f
+
+        // Draw vinyl record disc (Deep Charcoal/Black)
+        drawCircle(color = Color(0xFF14151B), radius = radius)
+        
+        // Concentric audio groove rings
+        for (i in 1..4) {
+            drawCircle(
+                color = Color(0x22FFFFFF),
+                radius = radius * (0.35f + i * 0.13f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f)
+            )
+        }
+
+        // Central sticker (glowing gold)
+        drawCircle(
+            color = Color(0xFFFFD700),
+            radius = radius * 0.32f
+        )
+        
+        // Inner record label ring
+        drawCircle(
+            color = Color(0xFF0F111A),
+            radius = radius * 0.25f
+        )
+
+        // Spindle hole
+        drawCircle(
+            color = Color(0xFF000000),
+            radius = radius * 0.08f
+        )
+
+        // Rotation needle/marker to visualize rotation
+        drawContext.transform.rotate(currentRotation, center)
+        drawLine(
+            color = Color(0x99FFFFFF),
+            start = center,
+            end = androidx.compose.ui.geometry.Offset(center.x, center.y - radius * 0.85f),
+            strokeWidth = 3f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawContext.transform.rotate(-currentRotation, center)
+    }
+}
+
+@Composable
+fun NotificationsScreen(viewModel: GameViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Configuration Switches
+        Card(
+            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    "COMMUNICATIONS CONFIGURATION",
+                    color = AmberGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("System Toast Notifications", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Show in-game drop-down announcement cards.", color = TextGray, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = viewModel.notificationsEnabled,
+                        onCheckedChange = { viewModel.notificationsEnabled = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = AmberGold, checkedTrackColor = AmberGold.copy(alpha = 0.4f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Challenge Invites Alerts", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("Get notified when online users offer direct challenges.", color = TextGray, fontSize = 10.sp)
+                    }
+                    Switch(
+                        checked = viewModel.challInvitesNotifications,
+                        onCheckedChange = { viewModel.challInvitesNotifications = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = AmberGold, checkedTrackColor = AmberGold.copy(alpha = 0.4f))
+                    )
+                }
+            }
+        }
+
+        // Notification Log list
+        Text(
+            text = "SYSTEM ANNOUNCEMENTS & LOG",
+            color = AmberGold,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp
+        )
+
+        if (viewModel.notificationHistory.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .background(Color(0x33FFFFFF), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No notifications or alert logs yet.", color = TextGray, fontSize = 11.sp)
+            }
+        } else {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                viewModel.notificationHistory.reversed().forEach { msg ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0x66000000)),
+                        border = BorderStroke(1.dp, Color(0x11FFFFFF)),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0x1AFFC107)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Notifications, contentDescription = null, tint = AmberGold, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = msg,
+                                color = TextWhite,
+                                fontSize = 11.sp,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun DraggableChatWidget(viewModel: GameViewModel) {
+    var chatOffsetX by remember { mutableStateOf(0f) }
+    var chatOffsetY by remember { mutableStateOf(0f) }
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(chatOffsetX.roundToInt(), chatOffsetY.roundToInt()) }
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 80.dp, end = 16.dp)
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        chatOffsetX += dragAmount.x
+                        chatOffsetY += dragAmount.y
+                    }
+                }
+                .width(if (isExpanded) 280.dp else 56.dp)
+                .height(if (isExpanded) 320.dp else 56.dp)
+                .background(
+                    color = DarkSurface.copy(alpha = 0.95f),
+                    shape = RoundedCornerShape(if (isExpanded) 16.dp else 28.dp)
+                )
+                .border(
+                    width = 1.5.dp,
+                    color = AmberGold,
+                    shape = RoundedCornerShape(if (isExpanded) 16.dp else 28.dp)
+                )
+                .clickable {
+                    if (!isExpanded) isExpanded = true
+                }
+        ) {
+            if (!isExpanded) {
+                Icon(
+                    imageVector = Icons.Default.Chat,
+                    contentDescription = "Chat",
+                    tint = AmberGold,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .align(Alignment.Center)
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Chat, contentDescription = null, tint = AmberGold, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Tactical Chat", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        IconButton(
+                            onClick = { isExpanded = false },
+                            modifier = Modifier.size(20.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Close", tint = TextGray, modifier = Modifier.size(14.dp))
+                        }
+                    }
+
+                    Divider(color = Color(0x1AFFFFFF), modifier = Modifier.padding(vertical = 6.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        val listState = rememberLazyListState()
+                        LaunchedEffect(viewModel.chatMessages.size) {
+                            if (viewModel.chatMessages.isNotEmpty()) {
+                                listState.animateScrollToItem(viewModel.chatMessages.size - 1)
+                            }
+                        }
+                        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                            items(viewModel.chatMessages) { msg ->
+                                Text(
+                                    text = "${msg.first}: ${msg.second}",
+                                    color = when (msg.first) {
+                                        "You" -> AmberGold
+                                        "System" -> Color(0xFF00E676)
+                                        else -> VioletNeon
+                                    },
+                                    fontSize = 11.sp,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    var textInput by remember { mutableStateOf("") }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        BasicTextField(
+                            value = textInput,
+                            onValueChange = { textInput = it },
+                            textStyle = TextStyle(color = TextWhite, fontSize = 12.sp),
+                            cursorBrush = SolidColor(AmberGold),
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(DarkSurfaceVariant, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) { innerTextField ->
+                            if (textInput.isEmpty()) {
+                                Text("Type message...", color = TextGray, fontSize = 11.sp)
+                            }
+                            innerTextField()
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        IconButton(
+                            onClick = {
+                                if (textInput.isNotBlank()) {
+                                    viewModel.sendChatMessage(textInput)
+                                    textInput = ""
+                                }
+                            },
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(AmberGold, CircleShape)
+                        ) {
+                            Icon(Icons.Default.Send, contentDescription = "Send", tint = DarkBg, modifier = Modifier.size(14.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TopGameAppBar(
+    title: String,
+    viewModel: GameViewModel,
+    onMenuClick: () -> Unit,
+    showBackButton: Boolean,
+    onBackClick: () -> Unit
+) {
+    val unreadCount = viewModel.appNotifications.count { !it.isRead }
+    var expandedNotifications by remember { mutableStateOf(false) }
+
+    Surface(
+        color = Color(0x990F111A),
+        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                IconButton(
+                    onClick = onMenuClick,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(Color(0x1AFFFFFF), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Menu",
+                        tint = AmberGold,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                if (showBackButton) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = onBackClick,
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(Color(0x1AFFFFFF), CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = AmberGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Notification Bell with badge
+            Box {
+                IconButton(
+                    onClick = { expandedNotifications = true },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(Color(0x1AFFFFFF), CircleShape)
+                ) {
+                    BadgedBox(
+                        badge = {
+                            if (unreadCount > 0) {
+                                Badge(
+                                    containerColor = RedCrimson,
+                                    contentColor = Color.White
+                                ) {
+                                    Text(unreadCount.toString(), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notifications",
+                            tint = AmberGold,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                // Bell dropdown popup
+                DropdownMenu(
+                    expanded = expandedNotifications,
+                    onDismissRequest = { expandedNotifications = false },
+                    modifier = Modifier
+                        .width(280.dp)
+                        .background(DarkSurface)
+                        .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(8.dp))
+                ) {
+                    Text(
+                        text = "COMMS & IN-GAME ALERTS",
+                        color = AmberGold,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Black,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                    Divider(color = Color(0x1AFFFFFF))
+
+                    if (viewModel.appNotifications.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("No notifications yet.", color = TextGray, fontSize = 11.sp) },
+                            onClick = { expandedNotifications = false }
+                        )
+                    } else {
+                        // Take the last 5 notifications to keep the list clean
+                        viewModel.appNotifications.takeLast(5).reversed().forEach { notification ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = notification.message,
+                                            color = if (notification.isRead) TextGray else TextWhite,
+                                            fontSize = 11.sp,
+                                            lineHeight = 14.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = if (notification.isRead) "Read" else "New • Click to view",
+                                            color = if (notification.isRead) TextGray else Color(0xFF00E676),
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    notification.isRead = true
+                                    expandedNotifications = false
+                                    viewModel.navigateTo(notification.targetScreen)
+                                    viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                                }
+                            )
+                            Divider(color = Color(0x11FFFFFF))
+                        }
+                    }
+
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                "View All Alerts",
+                                color = AmberGold,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        },
+                        onClick = {
+                            expandedNotifications = false
+                            viewModel.navigateTo(AppScreen.NOTIFICATIONS)
+                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GameBottomNavigation(
+    currentScreen: AppScreen,
+    onTabSelected: (AppScreen) -> Unit
+) {
+    NavigationBar(
+        containerColor = Color(0xEE0F111A),
+        tonalElevation = 8.dp,
+        modifier = Modifier.height(60.dp)
+    ) {
+        val tabs = listOf(
+            Triple(AppScreen.MAIN_MENU, Icons.Default.Home, "Home"),
+            Triple(AppScreen.OFFLINE_MENU, Icons.Default.SportsEsports, "Offline"),
+            Triple(AppScreen.ONLINE_MENU, Icons.Default.Public, "Online"),
+            Triple(AppScreen.RANKING, Icons.Default.EmojiEvents, "Leaders")
+        )
+
+        tabs.forEach { (screen, icon, label) ->
+            val isSelected = currentScreen == screen
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = { onTabSelected(screen) },
+                icon = {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = if (isSelected) AmberGold else TextGray,
+                        modifier = Modifier.size(20.dp)
+                    )
+                },
+                label = {
+                    Text(
+                        text = label,
+                        color = if (isSelected) AmberGold else TextGray,
+                        fontSize = 10.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = Color(0x22FFD700)
+                )
+            )
+        }
+    }
+}
+
+@Composable
+fun DrawerContent(
+    viewModel: GameViewModel,
+    onItemClick: (AppScreen) -> Unit,
+    onProfileClick: () -> Unit
+) {
+    val playerState by viewModel.playerState.collectAsState()
+
+    ModalDrawerSheet(
+        drawerContainerColor = Color(0xEE080911),
+        drawerContentColor = TextWhite,
+        modifier = Modifier.width(280.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Drawer Header Profile Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0x33FFC107)),
+                border = BorderStroke(1.dp, AmberGold.copy(alpha = 0.4f)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onProfileClick)
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x33FFC107)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = (playerState?.playerName ?: "P").take(2).uppercase(),
+                            color = AmberGold,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 16.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = playerState?.playerName ?: "Elite Commander",
+                            color = TextWhite,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Star, contentDescription = null, tint = AmberGold, modifier = Modifier.size(10.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "Lvl ${playerState?.level ?: 1}",
+                                color = AmberGold,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = AmberGold, modifier = Modifier.size(10.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = "${playerState?.draughtCoins ?: 250} Coins",
+                                color = TextWhite,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            Text(
+                "VANGUARD SECURE NAVIGATION",
+                color = AmberGold,
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+
+            // Navigation items in sidebar
+            val menuItems = listOf(
+                Triple(AppScreen.MAIN_MENU, Icons.Default.Home, "Home Dashboard"),
+                Triple(AppScreen.OFFLINE_MENU, Icons.Default.SportsEsports, "Offline Arenas"),
+                Triple(AppScreen.ONLINE_MENU, Icons.Default.Public, "Online Gateway"),
+                Triple(AppScreen.RANKING, Icons.Default.EmojiEvents, "Grandmaster Leaders"),
+                Triple(AppScreen.WALLETS, Icons.Default.AccountBalanceWallet, "Ledger Coin Wallet"),
+                Triple(AppScreen.STORE, Icons.Default.Storefront, "Skins & Stores"),
+                Triple(AppScreen.MUSIC_SETTINGS, Icons.Default.MusicNote, "Sound & Remix Studio"),
+                Triple(AppScreen.NOTIFICATIONS, Icons.Default.NotificationsActive, "Comms & Alerts"),
+                Triple(AppScreen.SETTINGS, Icons.Default.Settings, "System Regulations")
+            )
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                menuItems.forEach { (screen, icon, label) ->
+                    val isSelected = viewModel.currentScreen == screen
+                    NavigationDrawerItem(
+                        icon = { Icon(icon, contentDescription = null, tint = if (isSelected) AmberGold else TextGray) },
+                        label = { Text(label, color = if (isSelected) AmberGold else TextWhite, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                        selected = isSelected,
+                        onClick = { onItemClick(screen) },
+                        colors = NavigationDrawerItemDefaults.colors(
+                            unselectedContainerColor = Color.Transparent,
+                            selectedContainerColor = Color(0x1AFFD700)
+                        ),
+                        modifier = Modifier.height(40.dp)
+                    )
+                }
+            }
+
+            Divider(color = Color(0x1AFFFFFF))
+            
+            // App branding bottom
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "VANGUARD TACTICAL SYSTEM",
+                    color = TextGray,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "v6.0.4 - Secure Platform",
+                    color = TextGray,
+                    fontSize = 8.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun MainGameScreen(
     viewModel: GameViewModel,
     modifier: Modifier = Modifier
@@ -160,85 +3375,161 @@ fun MainGameScreen(
     }
 
     val playerState by viewModel.playerState.collectAsState()
-    val activeTab = viewModel.currentTab
+    val activeScreen = viewModel.currentScreen
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val coroutineScope = rememberCoroutineScope()
 
-    Scaffold(
-        modifier = modifier.fillMaxSize().background(DarkBg),
-        topBar = { GameHeader(playerState, viewModel) },
-        bottomBar = { GameBottomNavigation(activeTab) { viewModel.currentTab = it } }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(DarkBg)
+    AppBackgroundWrapper {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            drawerContent = {
+                DrawerContent(
+                    viewModel = viewModel,
+                    onItemClick = { screen ->
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.navigateTo(screen)
+                        viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                    },
+                    onProfileClick = {
+                        coroutineScope.launch { drawerState.close() }
+                        viewModel.isProfileDialogOpen = true
+                        viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                    }
+                )
+            }
         ) {
-            when (activeTab) {
-                GameTab.BATTLE -> BattleScreen(viewModel)
-                GameTab.HEROES -> HeroesScreen(viewModel)
-                GameTab.STORE -> StoreScreen(viewModel)
-                GameTab.LEADERBOARD -> LeaderboardScreen(viewModel)
-                GameTab.SYNC -> SyncScreen(viewModel)
-            }
-
-            // Cinematic Combat Screen Overlay
-            viewModel.activeCombat?.let { combat ->
-                CombatOverlay(combat = combat)
-            }
-
-            // Profile Management Dialog Overlay
-            if (viewModel.isProfileDialogOpen) {
-                ProfileManagementDialog(viewModel = viewModel)
-            }
-
-            // Google Auth Handshake / Account Selector Dialog Overlay
-            if (viewModel.isGoogleAuthDialogOpen) {
-                GoogleAuthenticationDialog(viewModel = viewModel)
-            }
-
-            // Game Rules & Help Dialog Overlay
-            if (viewModel.isRulesDialogOpen) {
-                GameRulesHelpDialog(viewModel = viewModel)
-            }
-
-            // Premium Payment Portal Dialog Overlay
-            if (viewModel.isPaymentPortalOpen) {
-                PremiumPaymentPortalDialog(viewModel = viewModel)
-            }
-
-            // Floating Active System Notification Banner HUD Card
-            viewModel.activeNotificationBanner?.let { bannerMessage ->
+            Scaffold(
+                containerColor = Color.Transparent,
+                topBar = {
+                    TopGameAppBar(
+                        title = when (activeScreen) {
+                            AppScreen.MAIN_MENU -> "DRAUGHTS COMBAT"
+                            AppScreen.OFFLINE_MENU -> "OFFLINE ARENA"
+                            AppScreen.ONLINE_MENU -> "MULTIPLAYER GATEWAY"
+                            AppScreen.GAME_SETUP -> "MATCH REGULATION SETUP"
+                            AppScreen.GAME_BOT -> "CAMPAIGN: VS BOT"
+                            AppScreen.GAME_LOCAL_PVP -> "LOCAL PASS & PLAY"
+                            AppScreen.GAME_ONLINE_PVP -> "ONLINE 1V1 COMBAT"
+                            AppScreen.ONLINE_COMPETITIONS -> "CHAMPIONSHIP CUPS"
+                            AppScreen.WALLETS -> "SECURE LEDGER COIN WALLET"
+                            AppScreen.STORE -> "TACTICAL SKIN STORE"
+                            AppScreen.SETTINGS -> "SYSTEM REGULATIONS"
+                            AppScreen.MUSIC_SETTINGS -> "ORCHESTRA SOUND STUDIO"
+                            AppScreen.NOTIFICATIONS -> "COMMS & ALERTS"
+                            AppScreen.RANKING -> "GRANDMASTER LEADERBOARD"
+                        },
+                        viewModel = viewModel,
+                        onMenuClick = {
+                            coroutineScope.launch { drawerState.open() }
+                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                        },
+                        showBackButton = when (activeScreen) {
+                            AppScreen.MAIN_MENU, AppScreen.OFFLINE_MENU, AppScreen.ONLINE_MENU, AppScreen.RANKING -> false
+                            else -> true
+                        },
+                        onBackClick = {
+                            viewModel.navigateBack()
+                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                        }
+                    )
+                },
+                bottomBar = {
+                    GameBottomNavigation(
+                        currentScreen = activeScreen,
+                        onTabSelected = { screen ->
+                            viewModel.navigateTo(screen)
+                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                        }
+                    )
+                }
+            ) { innerPadding ->
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-                        .align(Alignment.TopCenter)
-                        .animateContentSize()
+                        .fillMaxSize()
+                        .padding(innerPadding)
                 ) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = RedCrimson),
-                        border = BorderStroke(1.dp, AmberGold),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    when (activeScreen) {
+                        AppScreen.MAIN_MENU -> MainMenuScreen(viewModel)
+                        AppScreen.OFFLINE_MENU -> OfflineMenuScreen(viewModel)
+                        AppScreen.ONLINE_MENU -> OnlineMenuScreen(viewModel)
+                        AppScreen.GAME_SETUP -> GameSetupScreen(viewModel)
+                        AppScreen.GAME_BOT -> OfflineBotGameScreen(viewModel)
+                        AppScreen.GAME_LOCAL_PVP -> OfflineLocalGameScreen(viewModel)
+                        AppScreen.GAME_ONLINE_PVP -> OnlinePvPGameScreen(viewModel)
+                        AppScreen.ONLINE_COMPETITIONS -> OnlineCompetitionsScreen(viewModel)
+                        AppScreen.WALLETS -> WalletsScreen(viewModel)
+                        AppScreen.STORE -> StoreScreenWrapper(viewModel)
+                        AppScreen.SETTINGS -> SettingsScreen(viewModel)
+                        AppScreen.MUSIC_SETTINGS -> MusicSettingsScreen(viewModel)
+                        AppScreen.NOTIFICATIONS -> NotificationsScreen(viewModel)
+                        AppScreen.RANKING -> RankingsScreen(viewModel)
+                    }
+                }
+
+                // Dragging chat overlay button in bots or online match mode
+                if (activeScreen == AppScreen.GAME_BOT || activeScreen == AppScreen.GAME_ONLINE_PVP) {
+                    DraggableChatWidget(viewModel = viewModel)
+                }
+
+                // Cinematic Combat Screen Overlay
+                viewModel.activeCombat?.let { combat ->
+                    CombatOverlay(combat = combat)
+                }
+
+                // Profile Management Dialog Overlay
+                if (viewModel.isProfileDialogOpen) {
+                    ProfileManagementDialog(viewModel = viewModel)
+                }
+
+                // Google Auth Handshake / Account Selector Dialog Overlay
+                if (viewModel.isGoogleAuthDialogOpen) {
+                    GoogleAuthenticationDialog(viewModel = viewModel)
+                }
+
+                // Game Rules & Help Dialog Overlay
+                if (viewModel.isRulesDialogOpen) {
+                    GameRulesHelpDialog(viewModel = viewModel)
+                }
+
+                // Premium Payment Portal Dialog Overlay
+                if (viewModel.isPaymentPortalOpen) {
+                    PremiumPaymentPortalDialog(viewModel = viewModel)
+                }
+
+                // Floating Active System Notification Banner HUD Card
+                viewModel.activeNotificationBanner?.let { bannerMessage ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                            .align(Alignment.TopCenter)
+                            .animateContentSize()
                     ) {
-                        Row(
-                            modifier = Modifier.padding(14.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = RedCrimson),
+                            border = BorderStroke(1.dp, AmberGold),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.NotificationsActive,
-                                contentDescription = "Notification",
-                                tint = Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = bannerMessage,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                modifier = Modifier.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.NotificationsActive,
+                                    contentDescription = "Notification",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = bannerMessage,
+                                    color = Color.White,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }

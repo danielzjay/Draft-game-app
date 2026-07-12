@@ -24,10 +24,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        SoundManager.init(applicationContext)
+        val contextToUse = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            applicationContext.createAttributionContext("default")
+        } else {
+            applicationContext
+        }
+
+        SoundManager.init(contextToUse)
 
         // Core Database and Repository initialization
-        val database = AppDatabase.getDatabase(applicationContext, lifecycleScope)
+        val database = AppDatabase.getDatabase(contextToUse, lifecycleScope)
         val repository = GameRepository(database.appDao())
 
         // Standard dynamic ViewModel instantiation
@@ -35,7 +41,7 @@ class MainActivity : ComponentActivity() {
             GameViewModelFactory(repository)
         }.value
 
-        viewModel.restoreSavedAudioPreferences(applicationContext)
+        viewModel.restoreSavedAudioPreferences(contextToUse)
 
         setContent {
             MyApplicationTheme {

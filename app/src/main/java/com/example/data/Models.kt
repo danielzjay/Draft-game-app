@@ -37,7 +37,11 @@ data class PlayerState(
     val lastSyncedTime: Long = 0L,
     val syncAccount: String = "",
     val customMusicUri: String? = null, // content:// URI of a user-picked song, if any
-    val customMusicName: String? = null
+    val customMusicName: String? = null,
+    val tagline: String = "Tactical Overlord",
+    val phoneNumber: String = "",
+    val countryCode: String = "+256",
+    val photoUri: String? = null
 )
 
 @Entity(tableName = "blockchain_ledger")

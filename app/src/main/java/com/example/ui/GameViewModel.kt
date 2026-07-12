@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.mutableStateListOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -74,7 +75,42 @@ enum class GameTab {
     BATTLE, HEROES, STORE, LEADERBOARD, SYNC
 }
 
+enum class AppScreen {
+    MAIN_MENU,
+    OFFLINE_MENU,
+    ONLINE_MENU,
+    GAME_BOT,
+    GAME_LOCAL_PVP,
+    GAME_ONLINE_PVP,
+    ONLINE_COMPETITIONS,
+    WALLETS,
+    STORE,
+    SETTINGS,
+    MUSIC_SETTINGS,
+    NOTIFICATIONS,
+    RANKING,
+    GAME_SETUP
+}
+
 class GameViewModel(private val repository: GameRepository) : ViewModel() {
+
+    // Centralized Navigation state
+    var currentScreen by mutableStateOf(AppScreen.MAIN_MENU)
+    val screenHistory = mutableStateListOf<AppScreen>()
+    var isOnlineRankingMode by mutableStateOf(false)
+
+    fun navigateTo(screen: AppScreen) {
+        screenHistory.add(currentScreen)
+        currentScreen = screen
+    }
+
+    fun navigateBack() {
+        if (screenHistory.isNotEmpty()) {
+            currentScreen = screenHistory.removeAt(screenHistory.size - 1)
+        } else {
+            currentScreen = AppScreen.MAIN_MENU
+        }
+    }
 
     // Central state flows from Room Database
     val heroes: StateFlow<List<Hero>> = repository.allHeroes.stateIn(
@@ -203,6 +239,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var showSplashScreen by mutableStateOf(true)
 
     // --- PREMIUM PAYMENT PORTAL GATEWAY (Relworx Mobile Money) ---
+    var isPremiumUser by mutableStateOf(false)
     var isPaymentPortalOpen by mutableStateOf(false)
     var paymentPortalPackageName by mutableStateOf("")
     var paymentPortalPackageCost by mutableStateOf("") // display string, e.g. "2,000 UGX"
@@ -430,9 +467,15 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var selectedMusicTrack by mutableStateOf(bundledMusicTracks.first().displayName)
     var customMusicUri by mutableStateOf<String?>(null)
     var customMusicName by mutableStateOf<String?>(null)
+    val customMusicPlaylistUris = mutableStateListOf<String>()
+    val customMusicPlaylistNames = mutableStateListOf<String>()
+    var playbackSpeed by mutableStateOf(1.0f)
+    var isBeatOverlayActive by mutableStateOf(false)
 
     // --- CUSTOM GAME RULES ---
     var ruleSystem by mutableStateOf(DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION)
+    var localPlayer1Name by mutableStateOf("Player 1")
+    var localPlayer2Name by mutableStateOf("Player 2")
     var ruleCombatDraughts by mutableStateOf(true) // true = combat stats, false = classic checkers
     var ruleForcedJumps by mutableStateOf(true)   // true = must jump if jump exists
     var ruleFlyingKings by mutableStateOf(false)    // true = king multi-step slide
@@ -858,10 +901,38 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     var selectedIapPackageCost by mutableStateOf("")
     var iapPurchaseSuccessMessage by mutableStateOf<String?>(null)
 
+    data class AppNotification(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val message: String,
+        val targetScreen: AppScreen,
+        var isRead: Boolean = false,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    val appNotifications = mutableStateListOf<AppNotification>()
+
+    fun triggerAppNotification(message: String, targetScreen: AppScreen) {
+        val notification = AppNotification(message = message, targetScreen = targetScreen)
+        appNotifications.add(notification)
+        triggerNotification(message)
+    }
+
+    val notificationHistory = mutableStateListOf<String>()
+
     // Notification HUD Banner helper
     var activeNotificationBanner by mutableStateOf<String?>(null)
 
     fun triggerNotification(message: String) {
+        notificationHistory.add(message)
+        if (appNotifications.none { it.message == message }) {
+            val target = when {
+                message.contains("wallet", ignoreCase = true) || message.contains("coins", ignoreCase = true) || message.contains("BLC", ignoreCase = true) -> AppScreen.WALLETS
+                message.contains("online", ignoreCase = true) || message.contains("matched", ignoreCase = true) || message.contains("LIVE", ignoreCase = true) || message.contains("now online", ignoreCase = true) -> AppScreen.ONLINE_MENU
+                message.contains("music", ignoreCase = true) || message.contains("song", ignoreCase = true) || message.contains("track", ignoreCase = true) -> AppScreen.MUSIC_SETTINGS
+                else -> AppScreen.MAIN_MENU
+            }
+            appNotifications.add(AppNotification(message = message, targetScreen = target))
+        }
         viewModelScope.launch {
             if (notificationsEnabled) {
                 activeNotificationBanner = message
@@ -891,7 +962,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 if (knownOnlinePlayers.isNotEmpty()) {
                     val newlyJoined = list.filter { it.uid !in knownOnlinePlayers }
                     for (player in newlyJoined) {
-                        triggerNotification("⚔️ ${player.name} is now LIVE! Challenge them under ${player.ruleSystem.replace('_', ' ')}!")
+                        triggerAppNotification("⚔️ ${player.name} is now LIVE! Challenge them under ${player.ruleSystem.replace('_', ' ')}!", AppScreen.ONLINE_MENU)
                     }
                 }
                 knownOnlinePlayers = newOnlinePlayers
@@ -2318,6 +2389,53 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         viewModelScope.launch {
             val state = playerState.value ?: return@launch
             repository.updatePlayerState(state.copy(customMusicUri = uri.toString(), customMusicName = displayName))
+        }
+    }
+
+    fun setCustomMusicPlaylist(context: Context, uris: List<android.net.Uri>) {
+        if (uris.isEmpty()) return
+        customMusicPlaylistUris.clear()
+        customMusicPlaylistNames.clear()
+        val urisList = mutableListOf<android.net.Uri>()
+        uris.forEach { uri ->
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {}
+            customMusicPlaylistUris.add(uri.toString())
+            val name = queryFileDisplayName(context, uri) ?: "Custom Track"
+            customMusicPlaylistNames.add(name)
+            urisList.add(uri)
+        }
+        
+        selectedMusicTrack = "Playlist (${uris.size} tracks)"
+        customMusicUri = uris.first().toString()
+        customMusicName = customMusicPlaylistNames.first()
+        
+        SoundManager.playCustomPlaylist(context, urisList)
+        triggerAppNotification("Loaded ${uris.size} songs for continuous play!", AppScreen.MUSIC_SETTINGS)
+    }
+
+    fun changePlaybackSpeed(speed: Float) {
+        playbackSpeed = speed
+        SoundManager.setPlaybackSpeed(speed)
+    }
+
+    fun toggleBeatOverlay(context: Context, active: Boolean) {
+        isBeatOverlayActive = active
+        SoundManager.toggleBeatOverlay(context, active)
+    }
+
+    private fun queryFileDisplayName(context: Context, uri: android.net.Uri): String? {
+        return try {
+            context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (cursor.moveToFirst() && nameIndex >= 0) cursor.getString(nameIndex) else null
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 

@@ -8,16 +8,10 @@ import android.net.Uri
 import com.example.R
 
 /**
- * Real audio playback — replaces the old fake "Now Playing" label that never made a sound.
- *
- * Short one-shot effects (coin, unlock, defeat, etc.) go through SoundPool, which is built for
- * exactly this: low-latency playback of many short clips. Background music uses a looping
- * MediaPlayer, which is the right tool for a single long-running track instead.
- *
- * Bundled tracks live in res/raw as .ogg (Vorbis compresses far better than the original .wav
- * files without an audible quality loss for game audio — the whole music+SFX bundle is now
- * ~630KB instead of ~11.5MB). A player can also pick their OWN song from their device (see
- * `playCustomMusic`) — that one is streamed by URI rather than bundled as a resource.
+ * Real audio playback manager.
+ * Short one-shot sound effects (coin, unlock, etc.) run through SoundPool for ultra-low latency.
+ * Background soundtracks are delegated to the AutoDJEngine for professional continuous mixing,
+ * crossfading, and tempo synchronization.
  */
 object SoundManager {
 
@@ -33,19 +27,21 @@ object SoundManager {
 
     private var soundPool: SoundPool? = null
     private val soundIds = mutableMapOf<Sfx, Int>()
-    private var musicPlayer: MediaPlayer? = null
     private var appContext: Context? = null
 
     var musicVolume: Float = 0.7f
         set(value) {
             field = value.coerceIn(0f, 1f)
-            musicPlayer?.setVolume(field, field)
+            AutoDJEngine.masterVolume = field
         }
     var sfxVolume: Float = 0.8f
 
     fun init(context: Context) {
         if (soundPool != null) return // already initialized
         appContext = context.applicationContext
+
+        // Initialize AutoDJ engine
+        AutoDJEngine.init(context)
 
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
@@ -72,58 +68,60 @@ object SoundManager {
     /** Plays one of the bundled background tracks, looping, replacing whatever was playing. */
     fun playBundledMusic(resId: Int) {
         val context = appContext ?: return
-        stopMusic()
-        musicPlayer = MediaPlayer.create(context, resId)?.apply {
-            isLooping = true
-            setVolume(musicVolume, musicVolume)
-            start()
+        val displayName = when (resId) {
+            R.raw.music_battle_loop -> "Vanguard Anthem"
+            else -> "Bundled Track"
+        }
+        AutoDJEngine.playBundledMusic(context, resId, displayName)
+    }
+
+    /** Plays custom songs using a continuous DJ playlist. */
+    fun playCustomPlaylist(context: Context, uris: List<Uri>, startIndex: Int = 0) {
+        val names = uris.map { uri ->
+            uri.lastPathSegment ?: "Custom Song"
+        }
+        AutoDJEngine.playPlaylist(context, uris, names, startIndex)
+    }
+
+    /** Plays a custom song using a single track source. */
+    fun playCustomMusic(context: Context, uri: Uri): Boolean {
+        val name = uri.lastPathSegment ?: "Custom Track"
+        AutoDJEngine.playSingleTrack(context, uri, name)
+        return true
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        // Simple adapter for retro compatibility
+        if (speed in 0.9f..1.1f) {
+            AutoDJEngine.deckAPitchShift = 0f
+            AutoDJEngine.deckBPitchShift = 0f
+        } else {
+            val delta = speed - 1.0f
+            AutoDJEngine.deckAPitchShift = delta
+            AutoDJEngine.deckBPitchShift = delta
         }
     }
 
-    /**
-     * Plays a song the player picked themselves from their own device (see MusicPicker.kt for
-     * how the URI is obtained). Requires a persistable URI permission to survive app restarts —
-     * that's requested at pick-time, not here.
-     */
-    fun playCustomMusic(context: Context, uri: Uri): Boolean {
-        stopMusic()
-        return try {
-            musicPlayer = MediaPlayer().apply {
-                setDataSource(context, uri)
-                isLooping = true
-                setVolume(musicVolume, musicVolume)
-                prepare()
-                start()
-            }
-            true
-        } catch (e: Exception) {
-            musicPlayer = null
-            false
-        }
+    fun toggleBeatOverlay(context: Context, active: Boolean) {
+        AutoDJEngine.bassSwapActive = active
     }
 
     fun pauseMusic() {
-        musicPlayer?.let { if (it.isPlaying) it.pause() }
+        AutoDJEngine.pauseMusic()
     }
 
     fun resumeMusic() {
-        musicPlayer?.let { if (!it.isPlaying) it.start() }
+        AutoDJEngine.resumeMusic()
     }
 
     fun stopMusic() {
-        musicPlayer?.apply {
-            try {
-                stop()
-            } catch (_: Exception) { /* not started yet — nothing to stop */ }
-            release()
-        }
-        musicPlayer = null
+        AutoDJEngine.stopEngine()
     }
 
     fun release() {
-        stopMusic()
         soundPool?.release()
         soundPool = null
         soundIds.clear()
+        AutoDJEngine.release()
     }
 }
