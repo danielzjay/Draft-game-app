@@ -17,19 +17,31 @@ android {
     applicationId = "com.aistudio.draughtscombat.qdvyx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 31
-    versionName = "31.0"
+    versionCode = 32
+    versionName = "32.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
-      storeFile = file(keystorePath)
-      storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
-      keyPassword = System.getenv("KEY_PASSWORD")
+      val keystorePath = System.getenv("KEYSTORE_PATH")
+      val hasKeystore = !keystorePath.isNullOrEmpty() && file(keystorePath).exists()
+      val storePass = System.getenv("STORE_PASSWORD")
+      val keyPass = System.getenv("KEY_PASSWORD")
+
+      if (hasKeystore && !storePass.isNullOrEmpty() && !keyPass.isNullOrEmpty()) {
+        storeFile = file(keystorePath!!)
+        storePassword = storePass
+        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+        keyPassword = keyPass
+      } else {
+        // Fallback to debug configuration to prevent build failures when release credentials are not supplied
+        storeFile = file("${rootDir}/debug.keystore")
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
     }
     create("debugConfig") {
       storeFile = file("${rootDir}/debug.keystore")
