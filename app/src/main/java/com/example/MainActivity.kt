@@ -1,12 +1,17 @@
 package com.example
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.audio.SoundManager
 import com.example.data.AppDatabase
@@ -15,6 +20,7 @@ import com.example.ui.GameViewModel
 import com.example.ui.GameViewModelFactory
 import com.example.ui.screens.MainGameScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.utils.NotificationHelper
 
 class MainActivity : ComponentActivity() {
 
@@ -30,6 +36,23 @@ class MainActivity : ComponentActivity() {
             applicationContext
         }
 
+        // Initialize Notification Channel
+        NotificationHelper.createNotificationChannel(contextToUse)
+
+        // Request runtime notification permission on Android 13+ (API 33+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val requestPermissionLauncher = registerForActivityResult(
+                ActivityResultContracts.RequestPermission()
+            ) { isGranted: Boolean ->
+                if (isGranted) {
+                    // System notifications enabled successfully!
+                }
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
         SoundManager.init(contextToUse)
 
         // Core Database and Repository initialization
@@ -38,7 +61,7 @@ class MainActivity : ComponentActivity() {
 
         // Standard dynamic ViewModel instantiation
         viewModel = viewModels<GameViewModel> {
-            GameViewModelFactory(repository)
+            GameViewModelFactory(repository, application)
         }.value
 
         viewModel.restoreSavedAudioPreferences(contextToUse)

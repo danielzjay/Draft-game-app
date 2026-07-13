@@ -82,8 +82,6 @@ object OnlineMatchRepository {
         return callbackFlow {
             val reg = db.collection(QUEUE)
                 .whereEqualTo("ruleSystem", ruleSystem)
-                .orderBy("joinedAt", Query.Direction.ASCENDING)
-                .limit(30)
                 .addSnapshotListener { snap, _ ->
                     val list = snap?.documents
                         ?.filter { it.id != selfUid && it.getString("matchedMatchId") == null }
@@ -95,7 +93,9 @@ object OnlineMatchRepository {
                                 ruleSystem = doc.getString("ruleSystem") ?: ruleSystem,
                                 joinedAt = doc.getLong("joinedAt") ?: 0L
                             )
-                        } ?: emptyList()
+                        }
+                        ?.sortedBy { it.joinedAt }
+                        ?.take(30) ?: emptyList()
                     trySend(list)
                 }
             awaitClose { reg.remove() }
@@ -169,11 +169,11 @@ object OnlineMatchRepository {
         return try {
             val candidates = db.collection(QUEUE)
                 .whereEqualTo("ruleSystem", ruleSystem)
-                .orderBy("joinedAt", Query.Direction.ASCENDING)
-                .limit(10)
                 .get().await()
                 .documents
                 .filter { it.id != selfUid && it.getString("matchedMatchId") == null }
+                .sortedBy { it.getLong("joinedAt") ?: 0L }
+                .take(10)
 
             val opponent = candidates.firstOrNull() ?: return null
             if (selfUid > opponent.id) return null // only the alphabetically-first uid claims
@@ -252,6 +252,16 @@ object OnlineMatchRepository {
         }
     }
 
+    suspend fun updateMatchSong(matchId: String, field: String, songName: String): Result<Unit> {
+        val db = dbOrNull ?: return Result.failure(Exception("Firebase is not initialized."))
+        return try {
+            db.collection(MATCHES).document(matchId).update(field, songName).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /**
      * Competitions only: if the player on the clock hasn't moved within the forfeit window,
      * whoever's turn it WASN'T wins by forfeit. Casual matches never expire — this simply does
@@ -299,7 +309,9 @@ object OnlineMatchRepository {
             tournamentId = data["tournamentId"] as? String,
             fixtureId = data["fixtureId"] as? String,
             lastMoveAt = (data["lastMoveAt"] as? Long) ?: 0L,
-            createdAt = (data["createdAt"] as? Long) ?: 0L
+            createdAt = (data["createdAt"] as? Long) ?: 0L,
+            player1Song = data["player1Song"] as? String ?: "",
+            player2Song = data["player2Song"] as? String ?: ""
         )
     }
 
@@ -326,4 +338,194 @@ object OnlineMatchRepository {
         }
         return pieces
     }
+
+    private const val PRESENCE = "online_presence"
+    private const val CHALLENGES = "direct_challenges"
+
+    suspend fun updatePresence(name: String, mmr: Int, ruleSystem: String, inGame: Boolean) {
+        val db = dbOrNull ?: return
+        val uid = currentUid() ?: return
+        try {
+            val presence = mapOf(
+                "uid" to uid,
+                "name" to name,
+                "lastSeen" to System.currentTimeMillis(),
+                "mmr" to mmr,
+                "ruleSystem" to ruleSystem,
+                "inGame" to inGame
+            )
+            db.collection(PRESENCE).document(uid).set(presence).await()
+        } catch (_: Exception) {}
+    }
+
+    suspend fun removePresence() {
+        val db = dbOrNull ?: return
+        val uid = currentUid() ?: return
+        try {
+            db.collection(PRESENCE).document(uid).delete().await()
+        } catch (_: Exception) {}
+    }
+
+    fun observeOnlinePlayers(): Flow<List<OnlinePlayerPresence>> {
+        val db = dbOrNull ?: return flowOf(emptyList())
+        val selfUid = currentUid()
+        return callbackFlow {
+            val reg = db.collection(PRESENCE).addSnapshotListener { snap, _ ->
+                val list = snap?.documents?.mapNotNull { doc ->
+                    val lastSeen = doc.getLong("lastSeen") ?: 0L
+                    if (doc.id == selfUid || lastSeen < System.currentTimeMillis() - 45000) {
+                        null
+                    } else {
+                        OnlinePlayerPresence(
+                            uid = doc.id,
+                            name = doc.getString("name") ?: "Player",
+                            lastSeen = lastSeen,
+                            mmr = doc.getLong("mmr")?.toInt() ?: 1000,
+                            ruleSystem = doc.getString("ruleSystem") ?: "AMERICAN_CHECKER_FEDERATION",
+                            inGame = doc.getBoolean("inGame") ?: false
+                        )
+                    }
+                } ?: emptyList()
+                trySend(list)
+            }
+            awaitClose { reg.remove() }
+        }
+    }
+
+    suspend fun sendDirectChallenge(receiverUid: String, receiverName: String, ruleSystem: String): Result<String> {
+        val db = dbOrNull ?: return Result.failure(Exception("Firebase is not initialized."))
+        val selfUid = currentUid() ?: return Result.failure(Exception("Not logged in."))
+        return try {
+            val selfNameSnap = db.collection(PRESENCE).document(selfUid).get().await()
+            val selfName = selfNameSnap.getString("name") ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "Player"
+            
+            val requestId = "${selfUid}_${receiverUid}"
+            val request = mapOf(
+                "requestId" to requestId,
+                "senderUid" to selfUid,
+                "senderName" to selfName,
+                "receiverUid" to receiverUid,
+                "receiverName" to receiverName,
+                "ruleSystem" to ruleSystem,
+                "status" to "PENDING",
+                "matchId" to null,
+                "timestamp" to System.currentTimeMillis()
+            )
+            db.collection(CHALLENGES).document(requestId).set(request).await()
+            Result.success(requestId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun observeIncomingChallenges(): Flow<List<DirectChallenge>> {
+        val db = dbOrNull ?: return flowOf(emptyList())
+        val selfUid = currentUid() ?: return flowOf(emptyList())
+        return callbackFlow {
+            val reg = db.collection(CHALLENGES)
+                .whereEqualTo("receiverUid", selfUid)
+                .whereEqualTo("status", "PENDING")
+                .addSnapshotListener { snap, _ ->
+                    val list = snap?.documents?.mapNotNull { doc ->
+                        DirectChallenge(
+                            requestId = doc.id,
+                            senderUid = doc.getString("senderUid") ?: "",
+                            senderName = doc.getString("senderName") ?: "Challenger",
+                            receiverUid = doc.getString("receiverUid") ?: "",
+                            receiverName = doc.getString("receiverName") ?: "",
+                            ruleSystem = doc.getString("ruleSystem") ?: "AMERICAN_CHECKER_FEDERATION",
+                            status = doc.getString("status") ?: "PENDING",
+                            matchId = doc.getString("matchId"),
+                            timestamp = doc.getLong("timestamp") ?: 0L
+                        )
+                    } ?: emptyList()
+                    trySend(list)
+                }
+            awaitClose { reg.remove() }
+        }
+    }
+
+    fun observeOutgoingChallenges(): Flow<List<DirectChallenge>> {
+        val db = dbOrNull ?: return flowOf(emptyList())
+        val selfUid = currentUid() ?: return flowOf(emptyList())
+        return callbackFlow {
+            val reg = db.collection(CHALLENGES)
+                .whereEqualTo("senderUid", selfUid)
+                .addSnapshotListener { snap, _ ->
+                    val list = snap?.documents?.mapNotNull { doc ->
+                        DirectChallenge(
+                            requestId = doc.id,
+                            senderUid = doc.getString("senderUid") ?: "",
+                            senderName = doc.getString("senderName") ?: "",
+                            receiverUid = doc.getString("receiverUid") ?: "",
+                            receiverName = doc.getString("receiverName") ?: "",
+                            ruleSystem = doc.getString("ruleSystem") ?: "AMERICAN_CHECKER_FEDERATION",
+                            status = doc.getString("status") ?: "PENDING",
+                            matchId = doc.getString("matchId"),
+                            timestamp = doc.getLong("timestamp") ?: 0L
+                        )
+                    } ?: emptyList()
+                    trySend(list)
+                }
+            awaitClose { reg.remove() }
+        }
+    }
+
+    suspend fun respondToChallenge(requestId: String, accept: Boolean, ruleSystem: String): Result<String?> {
+        val db = dbOrNull ?: return Result.failure(Exception("Firebase is not initialized."))
+        val selfUid = currentUid() ?: return Result.failure(Exception("Not logged in."))
+        return try {
+            val docRef = db.collection(CHALLENGES).document(requestId)
+            val requestSnap = docRef.get().await()
+            if (!requestSnap.exists()) return Result.failure(Exception("Challenge request no longer exists."))
+            
+            if (!accept) {
+                docRef.update("status", "DECLINED").await()
+                return Result.success(null)
+            }
+            
+            val senderUid = requestSnap.getString("senderUid") ?: ""
+            val senderName = requestSnap.getString("senderName") ?: "Player"
+            val selfNameSnap = db.collection(PRESENCE).document(selfUid).get().await()
+            val selfName = selfNameSnap.getString("name") ?: FirebaseAuth.getInstance().currentUser?.displayName ?: "Player"
+
+            val matchId = db.collection(MATCHES).document().id
+            val startingBoard = buildStartingBoard(ruleSystem)
+            val match = mapOf(
+                "matchId" to matchId,
+                "player1Uid" to senderUid, "player1Name" to senderName,
+                "player2Uid" to selfUid, "player2Name" to selfName,
+                "ruleSystem" to ruleSystem,
+                "board" to startingBoard.map { pieceToMap(it) },
+                "turnUid" to senderUid,
+                "status" to MatchStatus.ACTIVE,
+                "winnerUid" to null,
+                "isCompetition" to false,
+                "tournamentId" to null,
+                "fixtureId" to null,
+                "lastMoveAt" to System.currentTimeMillis(),
+                "createdAt" to System.currentTimeMillis()
+            )
+            db.collection(MATCHES).document(matchId).set(match).await()
+            
+            docRef.update(
+                mapOf(
+                    "status" to "ACCEPTED",
+                    "matchId" to matchId
+                )
+            ).await()
+            
+            Result.success(matchId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun clearChallenge(requestId: String) {
+        val db = dbOrNull ?: return
+        try {
+            db.collection(CHALLENGES).document(requestId).delete().await()
+        } catch (_: Exception) {}
+    }
 }
+

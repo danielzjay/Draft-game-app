@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -160,18 +161,27 @@ fun SplashScreenComponent(viewModel: GameViewModel) {
 }
 
 @Composable
-fun AppBackgroundWrapper(content: @Composable BoxScope.() -> Unit) {
+fun AppBackgroundWrapper(
+    activeScreen: AppScreen = AppScreen.MAIN_MENU,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val bgRes = when (activeScreen) {
+        AppScreen.STORE -> R.drawable.img_store_bg_1783856402223
+        AppScreen.GAME_BOT, AppScreen.GAME_LOCAL_PVP, AppScreen.GAME_ONLINE_PVP -> R.drawable.img_battle_bg_1783856416447
+        AppScreen.RANKING -> R.drawable.img_rankings_bg_1783856430416
+        else -> R.drawable.img_tactical_bg_1783856365354
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF07070A))
     ) {
         Image(
-            painter = painterResource(id = R.drawable.img_splash_screen_1783691857912),
+            painter = painterResource(id = bgRes),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-            alpha = 0.22f
+            alpha = 0.45f
         )
         // Radiant dark overlay
         Box(
@@ -180,8 +190,8 @@ fun AppBackgroundWrapper(content: @Composable BoxScope.() -> Unit) {
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.5f),
-                            Color(0xFF07070A).copy(alpha = 0.95f)
+                            Color.Black.copy(alpha = 0.4f),
+                            Color(0xFF07070A).copy(alpha = 0.9f)
                         )
                     )
                 )
@@ -290,40 +300,66 @@ fun MainMenuScreen(viewModel: GameViewModel) {
     ) {
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Large Game Logo
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(vertical = 8.dp)
+        // Large Game Logo with tactical sci-fi HUD frame elements
+        Box(
+            modifier = Modifier
+                .padding(vertical = 12.dp)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "DRAUGHTS COMBAT",
-                color = AmberGold,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 3.sp,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "TACTICAL ARENA PORTAL",
-                color = TextWhite.copy(alpha = 0.7f),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.5.sp,
-                modifier = Modifier.padding(top = 2.dp)
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "DRAUGHTS COMBAT",
+                    color = AmberGold,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 4.sp,
+                    textAlign = TextAlign.Center,
+                    style = TextStyle(
+                        shadow = androidx.compose.ui.graphics.Shadow(
+                            color = AmberGold.copy(alpha = 0.5f),
+                            blurRadius = 8f,
+                            offset = androidx.compose.ui.geometry.Offset(0f, 0f)
+                        )
+                    )
+                )
+                Text(
+                    text = "TACTICAL ARENA PORTAL",
+                    color = TextWhite.copy(alpha = 0.7f),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.8.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
 
-        // Profile Card Hero
+        // Profile Card Hero with tactical ID card glow and linear gradients
         Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
-            border = BorderStroke(1.5.dp, AmberGold),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+            border = BorderStroke(
+                width = 1.2.dp,
+                brush = Brush.linearGradient(
+                    colors = listOf(AmberGold, AmberGold.copy(alpha = 0.2f))
+                )
+            ),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { viewModel.isProfileDialogOpen = true }
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = listOf(DarkSurface, Color(0xFF0F111A))
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                )
         ) {
             Row(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(18.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 val (avatarColor, avatarIcon) = when (viewModel.selectedAvatarId) {
@@ -337,48 +373,76 @@ fun MainMenuScreen(viewModel: GameViewModel) {
 
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(54.dp)
                         .clip(CircleShape)
-                        .background(avatarColor),
+                        .background(avatarColor)
+                        .border(1.5.dp, Color.White.copy(alpha = 0.4f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        avatarIcon,
-                        contentDescription = "Avatar",
-                        tint = DarkBg,
-                        modifier = Modifier.size(28.dp)
-                    )
+                    val photo = playerState?.photoUri
+                    if (photo != null) {
+                        coil.compose.AsyncImage(
+                            model = photo,
+                            contentDescription = "Profile Photo",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            avatarIcon,
+                            contentDescription = "Avatar",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(16.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = name,
                         color = Color.White,
                         fontSize = 18.sp,
-                        fontWeight = FontWeight.Black
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        text = playerState?.tagline ?: "Tactical Overlord",
+                        color = TextGray,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                     )
                     Text(
                         text = "RANK TIER: ELITE III (Lv $lvl)",
                         color = AmberGold,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp
                     )
                 }
 
-                Column(horizontalAlignment = Alignment.End) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0x1AFFC738))
+                        .border(1.dp, AmberGold.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
                     Text(
                         text = "$coins",
                         color = AmberGold,
-                        fontSize = 18.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Black,
                         fontFamily = FontFamily.Monospace
                     )
                     Text(
                         text = "BLC BAL",
                         color = TextGray,
-                        fontSize = 9.sp,
+                        fontSize = 8.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -429,12 +493,23 @@ fun MainMenuCard(
     onClick: () -> Unit
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
-        border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(
+            width = 1.2.dp,
+            brush = Brush.linearGradient(
+                colors = listOf(iconColor.copy(alpha = 0.8f), Color(0x11FFFFFF))
+            )
+        ),
         shape = RoundedCornerShape(14.dp),
         modifier = modifier
             .height(130.dp)
             .clickable(onClick = onClick)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(DarkSurface, Color(0xFF0F111A))
+                ),
+                shape = RoundedCornerShape(14.dp)
+            )
     ) {
         Column(
             modifier = Modifier
@@ -442,18 +517,34 @@ fun MainMenuCard(
                 .padding(14.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(iconColor.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconColor,
-                    modifier = Modifier.size(24.dp)
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(iconColor.copy(alpha = 0.15f))
+                        .border(1.dp, iconColor.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                // Cybernetic accent bar
+                Box(
+                    modifier = Modifier
+                        .width(20.dp)
+                        .height(3.dp)
+                        .clip(CircleShape)
+                        .background(iconColor)
                 )
             }
 
@@ -537,37 +628,49 @@ fun OfflineMenuScreen(viewModel: GameViewModel) {
             modifier = Modifier.align(Alignment.Start)
         )
 
-        // Bot Battle Option
-        MainMenuRow(
-            title = "🤖 BATTLE TACTICAL BOT",
-            subtitle = "Slay the local machine intelligence campaign",
-            borderColor = AmberGold.copy(alpha = 0.7f),
-            backgroundColor = Color(0xAA0F111A)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            viewModel.changeGameMode(GameViewModel.SelectedGameMode.OFFLINE_VS_BOT)
-            viewModel.navigateTo(AppScreen.GAME_SETUP)
+            MainMenuCard(
+                title = "SHADOW CAMPAIGN",
+                subtitle = "Grandmaster solo battles",
+                icon = Icons.Default.SmartToy,
+                iconColor = AmberGold,
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.changeGameMode(GameViewModel.SelectedGameMode.OFFLINE_VS_BOT)
+                viewModel.navigateTo(AppScreen.GAME_SETUP)
+            }
+
+            MainMenuCard(
+                title = "PASS & PLAY",
+                subtitle = "Local 1v1 screen",
+                icon = Icons.Default.SportsEsports,
+                iconColor = RedCrimson,
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.changeGameMode(GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY)
+                viewModel.navigateTo(AppScreen.GAME_SETUP)
+            }
         }
 
-        // Local 1v1 Option
-        MainMenuRow(
-            title = "🎮 LOCAL PASS & PLAY (1v1)",
-            subtitle = "Battle a friend side-by-side on one screen",
-            borderColor = RedCrimson.copy(alpha = 0.7f),
-            backgroundColor = Color(0xAA0F111A)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            viewModel.changeGameMode(GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY)
-            viewModel.navigateTo(AppScreen.GAME_SETUP)
-        }
+            MainMenuCard(
+                title = "LEADERS & RANKS",
+                subtitle = "Campaign rankings",
+                icon = Icons.Default.EmojiEvents,
+                iconColor = Color(0xFF2979FF),
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.isOnlineRankingMode = false
+                viewModel.navigateTo(AppScreen.RANKING)
+            }
 
-        // Local Leaderboard Option
-        MainMenuRow(
-            title = "🏆 OFFLINE LEADERS & RANKS",
-            subtitle = "Check your current offline bot campaign ranks",
-            borderColor = Color(0xFF2979FF).copy(alpha = 0.7f),
-            backgroundColor = Color(0xAA0F111A)
-        ) {
-            viewModel.isOnlineRankingMode = false
-            viewModel.navigateTo(AppScreen.RANKING)
+            Spacer(modifier = Modifier.weight(1f))
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -580,32 +683,70 @@ fun MainMenuRow(
     subtitle: String,
     borderColor: Color,
     backgroundColor: Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     onClick: () -> Unit
 ) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        border = BorderStroke(1.5.dp, borderColor),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(1.2.dp, Brush.linearGradient(
+            listOf(borderColor, borderColor.copy(alpha = 0.2f))
+        )),
         shape = RoundedCornerShape(14.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp)
-        ) {
-            Text(
-                title,
-                color = Color.White,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 0.5.sp
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(backgroundColor, Color(0xFF0F111A))
+                ),
+                shape = RoundedCornerShape(14.dp)
             )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                subtitle,
-                color = TextGray,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Normal
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (icon != null) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(borderColor.copy(alpha = 0.12f))
+                        .border(1.dp, borderColor.copy(alpha = 0.3f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = borderColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = subtitle,
+                    color = TextGray,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Normal
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = TextGray.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp)
             )
         }
     }
@@ -630,37 +771,57 @@ fun OnlineMenuScreen(viewModel: GameViewModel) {
             modifier = Modifier.align(Alignment.Start)
         )
 
-        // Live 1v1 matchmaking option
-        MainMenuRow(
-            title = "⚔️ LIVE 1v1 MATCHMAKING",
-            subtitle = "Instant pairing with live human grandmasters online",
-            borderColor = Color(0xFF00E676).copy(alpha = 0.7f),
-            backgroundColor = Color(0xAA0F111A)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING)
-            viewModel.navigateTo(AppScreen.GAME_SETUP)
+            MainMenuCard(
+                title = "MATCHMAKING",
+                subtitle = "Live 1v1 online",
+                icon = Icons.Default.Bolt,
+                iconColor = Color(0xFF00E676),
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.changeGameMode(GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING)
+                viewModel.navigateTo(AppScreen.GAME_SETUP)
+            }
+
+            MainMenuCard(
+                title = "WORLD TOURNYS",
+                subtitle = "Cup league brackets",
+                icon = Icons.Default.EmojiEvents,
+                iconColor = AmberGold,
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITIONS)
+                viewModel.navigateTo(AppScreen.GAME_SETUP)
+            }
         }
 
-        // Competitions Option
-        MainMenuRow(
-            title = "🏆 WORLD CUP TOURNAMENTS",
-            subtitle = "Structured tournament brackets & official leagues",
-            borderColor = AmberGold.copy(alpha = 0.7f),
-            backgroundColor = Color(0xAA0F111A)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            viewModel.changeGameMode(GameViewModel.SelectedGameMode.COMPETITIONS)
-            viewModel.navigateTo(AppScreen.GAME_SETUP)
-        }
+            MainMenuCard(
+                title = "GLOBAL RANKS",
+                subtitle = "Live player leaderboard",
+                icon = Icons.Default.Star,
+                iconColor = Color(0xFF9C27B0),
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.isOnlineRankingMode = true
+                viewModel.navigateTo(AppScreen.RANKING)
+            }
 
-        // Global Leaderboard Option
-        MainMenuRow(
-            title = "🎖️ GLOBAL GRANDMASTER RANKINGS",
-            subtitle = "See live players' global mmr ranking list",
-            borderColor = Color(0xFF9C27B0).copy(alpha = 0.7f),
-            backgroundColor = Color(0xAA0F111A)
-        ) {
-            viewModel.isOnlineRankingMode = true
-            viewModel.navigateTo(AppScreen.RANKING)
+            MainMenuCard(
+                title = "CHALLENGES",
+                subtitle = "Invite online players",
+                icon = Icons.Default.Send,
+                iconColor = Color(0xFFFF9800),
+                modifier = Modifier.weight(1f)
+            ) {
+                viewModel.navigateTo(AppScreen.ONLINE_CHALLENGES)
+            }
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -750,57 +911,123 @@ fun GameSetupScreen(viewModel: GameViewModel) {
                 letterSpacing = 0.5.sp
             )
 
-            // Rules selection card list
-            DraughtsRuleSystem.values().forEach { rule ->
-                val isSelected = viewModel.ruleSystem == rule
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (isSelected) AmberGold.copy(alpha = 0.15f) else Color(0xAA0F111A)
-                    ),
-                    border = BorderStroke(
-                        width = 1.5.dp,
-                        color = if (isSelected) AmberGold else Color(0x1AFFFFFF)
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { 
-                            viewModel.ruleSystem = rule 
-                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
-                        }
+            val rules = DraughtsRuleSystem.values()
+            val chunkedRules = rules.toList().chunked(2)
+            chunkedRules.forEach { rowRules ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = rule.displayName,
-                                color = if (isSelected) AmberGold else TextWhite,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            if (isSelected) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Selected",
-                                    tint = AmberGold,
-                                    modifier = Modifier.size(18.dp)
+                    rowRules.forEach { rule ->
+                        val isSelected = viewModel.ruleSystem == rule
+                        val ruleIcon = when (rule) {
+                            DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION -> Icons.Default.Flag
+                            DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION -> Icons.Default.Book
+                            DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION -> Icons.Default.Public
+                        }
+                        val ruleColor = when (rule) {
+                            DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION -> RedCrimson
+                            DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION -> AmberGold
+                            DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION -> Color(0xFF2979FF)
+                        }
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                            border = BorderStroke(
+                                width = 1.2.dp,
+                                brush = Brush.linearGradient(
+                                    colors = if (isSelected) {
+                                        listOf(ruleColor, ruleColor.copy(alpha = 0.15f))
+                                    } else {
+                                        listOf(Color(0x33FFFFFF), Color(0x05FFFFFF))
+                                    }
                                 )
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(160.dp)
+                                .clickable { 
+                                    viewModel.selectRuleSystem(rule)
+                                    viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                                }
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colors = if (isSelected) {
+                                            listOf(ruleColor.copy(alpha = 0.12f), Color(0xFF0F111A))
+                                        } else {
+                                            listOf(DarkSurface, Color(0xFF0F111A))
+                                        }
+                                    ),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(ruleColor.copy(alpha = 0.15f))
+                                            .border(1.dp, ruleColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = ruleIcon,
+                                            contentDescription = null,
+                                            tint = ruleColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "Selected",
+                                            tint = ruleColor,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                Column {
+                                    Text(
+                                        text = rule.displayName,
+                                        color = if (isSelected) ruleColor else TextWhite,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Black,
+                                        letterSpacing = 0.5.sp,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = when (rule) {
+                                            DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION -> "ACF 8x8 checkers. Jumps mandatory. Classic rules."
+                                            DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION -> "EDA 8x8. Features official 3-move opening database."
+                                            DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION -> "FMJD International 10x10. Flying kings, majority captures."
+                                        },
+                                        color = TextGray,
+                                        fontSize = 10.sp,
+                                        lineHeight = 13.sp,
+                                        maxLines = 3,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = when (rule) {
-                                DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION -> "Classic American checkers. Played on an 8x8 grid. Jumps are mandatory. promoted Kings move 1 step only (no flying)."
-                                DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION -> "Professional British rules on an 8x8 grid. Forces a standard opening sequence from the EDA 3-move opening database."
-                                DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION -> "International checkers on a massive 10x10 board! Promoted kings become 'Flying Kings' sliding diagonally across the full grid, with FMJD Majority Capture rule active."
-                            },
-                            color = TextGray,
-                            fontSize = 10.sp,
-                            lineHeight = 14.sp
-                        )
+                    }
+                    if (rowRules.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }
@@ -821,7 +1048,7 @@ fun GameSetupScreen(viewModel: GameViewModel) {
             // STEP 2: Custom details per game mode
             when (gameMode) {
                 GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> {
-                    Text("🤖 OFFLINE BOT ENEMY REGULATIONS", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    Text("🔮 OFFLINE CAMPAIGN REGULATIONS", color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
 
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
@@ -830,7 +1057,7 @@ fun GameSetupScreen(viewModel: GameViewModel) {
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("SELECT BOT DIFFICULTY:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("SELECT CAMPAIGN DIFFICULTY:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             
                             // Difficulty selection chips
                             Row(
@@ -872,7 +1099,7 @@ fun GameSetupScreen(viewModel: GameViewModel) {
                             Divider(color = Color(0x1AFFFFFF))
 
                             // Opponent Profile card
-                            Text("ASSIGNED MACHINE INTELLIGENCE:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("ASSIGNED OPPONENT PROFILE:", color = TextWhite, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Box(
                                     modifier = Modifier
@@ -891,7 +1118,7 @@ fun GameSetupScreen(viewModel: GameViewModel) {
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(viewModel.currentBotPersona.name.replace("_", " "), color = TextWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                    Text("MMR Rating: ${viewModel.currentBotPersona.baseMmr} | Diff: ${viewModel.currentBotPersona.difficulty}", color = TextGray, fontSize = 10.sp)
+                                    Text("MMR Rating: ${viewModel.currentBotPersona.baseMmr} | Rank: ${viewModel.currentBotPersona.difficulty}", color = TextGray, fontSize = 10.sp)
                                 }
                             }
                         }
@@ -907,7 +1134,7 @@ fun GameSetupScreen(viewModel: GameViewModel) {
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.fillMaxWidth().height(48.dp)
                     ) {
-                        Text("ENGAGE IN BOT BATTLE", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text("ENGAGE IN COMBAT", color = Color.Black, fontWeight = FontWeight.Bold)
                         Spacer(modifier = Modifier.width(8.dp))
                         Icon(Icons.Default.SportsEsports, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
                     }
@@ -1108,13 +1335,13 @@ fun OfflineBotGameScreen(viewModel: GameViewModel) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Column {
                     Text(
-                        text = "VS BOT: ${bot.name}",
+                        text = "VS ${bot.name.replace("_", " ").uppercase()}",
                         color = Color.White,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Black
                     )
                     Text(
-                        text = "Difficulty: ${bot.difficulty} • Bot MMR: ${bot.baseMmr}",
+                        text = "Rank: ${bot.difficulty} • MMR: ${bot.baseMmr}",
                         color = TextGray,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
@@ -1129,8 +1356,43 @@ fun OfflineBotGameScreen(viewModel: GameViewModel) {
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, tint = AmberGold, modifier = Modifier.size(12.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Change Bot", color = AmberGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text("Change Opponent", color = AmberGold, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+
+        // Active Turn Status Bar
+        val isMyTurn = viewModel.turnRed
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (isMyTurn) Color(0x1100E676) else Color(0x11FF1744)
+            ),
+            border = BorderStroke(
+                1.dp, 
+                if (isMyTurn) Color(0xFF00E676).copy(alpha = 0.4f) else Color(0xFFFF1744).copy(alpha = 0.4f)
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (isMyTurn) Color(0xFF00E676) else Color(0xFFFF1744))
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (isMyTurn) "YOUR TURN (VANGUARD)" else "${bot.name.replace("_", " ").uppercase()}'S TURN (SHADOW)",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
             }
         }
 
@@ -1392,6 +1654,41 @@ fun OfflineLocalGameScreen(viewModel: GameViewModel) {
             }
         }
 
+        // Active Turn Status Bar
+        val turnRed = viewModel.turnRed
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (turnRed) Color(0x11FF1744) else Color(0x119C27B0)
+            ),
+            border = BorderStroke(
+                1.dp, 
+                if (turnRed) Color(0xFFFF1744).copy(alpha = 0.4f) else Color(0xFF9C27B0).copy(alpha = 0.4f)
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (turnRed) Color(0xFFFF1744) else Color(0xFF9C27B0))
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (turnRed) "VANGUARD'S TURN (RED)" else "SHADOW'S TURN (PURPLE)",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+            }
+        }
+
         // Captured Pieces (Shadow's Graveyard / Purple casualties)
         CapturedPiecesRow(
             title = "Shadow Graveyard",
@@ -1622,7 +1919,7 @@ fun WalletsScreen(viewModel: GameViewModel) {
         val ledger = listOf(
             Triple("Daily Login Reward", "+50 BLC", "SUCCESS"),
             Triple("Premium Gold Upgrade Attempt", "0 BLC", "PENDING_OAUTH"),
-            Triple("Campaign Bot Defeated (Bronze Bot)", "+75 BLC", "SUCCESS"),
+            Triple("Campaign Opponent Defeated", "+75 BLC", "SUCCESS"),
             Triple("Skin Store: Dark Forest Board Purchase", "-120 BLC", "SUCCESS")
         )
 
@@ -1689,7 +1986,7 @@ fun RankingsScreen(viewModel: GameViewModel) {
                         fontWeight = FontWeight.Black
                     )
                     Text(
-                        text = if (viewModel.isOnlineRankingMode) "Live global server stats. Updates dynamically." else "Local campaign high scores and bot training levels.",
+                        text = if (viewModel.isOnlineRankingMode) "Live global server stats. Updates dynamically." else "Local campaign high scores and opponent training levels.",
                         color = TextGray,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
@@ -3263,12 +3560,22 @@ fun DrawerContent(
                             .background(Color(0x33FFC107)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = (playerState?.playerName ?: "P").take(2).uppercase(),
-                            color = AmberGold,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 16.sp
-                        )
+                        val photo = playerState?.photoUri
+                        if (photo != null) {
+                            coil.compose.AsyncImage(
+                                model = photo,
+                                contentDescription = "Profile Photo",
+                                modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                            )
+                        } else {
+                            Text(
+                                text = (playerState?.playerName ?: "P").take(2).uppercase(),
+                                color = AmberGold,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 16.sp
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
@@ -3379,157 +3686,162 @@ fun MainGameScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val coroutineScope = rememberCoroutineScope()
 
-    AppBackgroundWrapper {
-        ModalNavigationDrawer(
-            drawerState = drawerState,
-            drawerContent = {
-                DrawerContent(
-                    viewModel = viewModel,
-                    onItemClick = { screen ->
-                        coroutineScope.launch { drawerState.close() }
-                        viewModel.navigateTo(screen)
-                        viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
-                    },
-                    onProfileClick = {
-                        coroutineScope.launch { drawerState.close() }
-                        viewModel.isProfileDialogOpen = true
-                        viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
-                    }
-                )
-            }
-        ) {
-            Scaffold(
-                containerColor = Color.Transparent,
-                topBar = {
-                    TopGameAppBar(
-                        title = when (activeScreen) {
-                            AppScreen.MAIN_MENU -> "DRAUGHTS COMBAT"
-                            AppScreen.OFFLINE_MENU -> "OFFLINE ARENA"
-                            AppScreen.ONLINE_MENU -> "MULTIPLAYER GATEWAY"
-                            AppScreen.GAME_SETUP -> "MATCH REGULATION SETUP"
-                            AppScreen.GAME_BOT -> "CAMPAIGN: VS BOT"
-                            AppScreen.GAME_LOCAL_PVP -> "LOCAL PASS & PLAY"
-                            AppScreen.GAME_ONLINE_PVP -> "ONLINE 1V1 COMBAT"
-                            AppScreen.ONLINE_COMPETITIONS -> "CHAMPIONSHIP CUPS"
-                            AppScreen.WALLETS -> "SECURE LEDGER COIN WALLET"
-                            AppScreen.STORE -> "TACTICAL SKIN STORE"
-                            AppScreen.SETTINGS -> "SYSTEM REGULATIONS"
-                            AppScreen.MUSIC_SETTINGS -> "ORCHESTRA SOUND STUDIO"
-                            AppScreen.NOTIFICATIONS -> "COMMS & ALERTS"
-                            AppScreen.RANKING -> "GRANDMASTER LEADERBOARD"
-                        },
+    AppBackgroundWrapper(activeScreen = activeScreen) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            ModalNavigationDrawer(
+                drawerState = drawerState,
+                drawerContent = {
+                    DrawerContent(
                         viewModel = viewModel,
-                        onMenuClick = {
-                            coroutineScope.launch { drawerState.open() }
-                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
-                        },
-                        showBackButton = when (activeScreen) {
-                            AppScreen.MAIN_MENU, AppScreen.OFFLINE_MENU, AppScreen.ONLINE_MENU, AppScreen.RANKING -> false
-                            else -> true
-                        },
-                        onBackClick = {
-                            viewModel.navigateBack()
-                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
-                        }
-                    )
-                },
-                bottomBar = {
-                    GameBottomNavigation(
-                        currentScreen = activeScreen,
-                        onTabSelected = { screen ->
+                        onItemClick = { screen ->
+                            coroutineScope.launch { drawerState.close() }
                             viewModel.navigateTo(screen)
                             viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                        },
+                        onProfileClick = {
+                            coroutineScope.launch { drawerState.close() }
+                            viewModel.isProfileDialogOpen = true
+                            viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
                         }
                     )
                 }
-            ) { innerPadding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding)
-                ) {
-                    when (activeScreen) {
-                        AppScreen.MAIN_MENU -> MainMenuScreen(viewModel)
-                        AppScreen.OFFLINE_MENU -> OfflineMenuScreen(viewModel)
-                        AppScreen.ONLINE_MENU -> OnlineMenuScreen(viewModel)
-                        AppScreen.GAME_SETUP -> GameSetupScreen(viewModel)
-                        AppScreen.GAME_BOT -> OfflineBotGameScreen(viewModel)
-                        AppScreen.GAME_LOCAL_PVP -> OfflineLocalGameScreen(viewModel)
-                        AppScreen.GAME_ONLINE_PVP -> OnlinePvPGameScreen(viewModel)
-                        AppScreen.ONLINE_COMPETITIONS -> OnlineCompetitionsScreen(viewModel)
-                        AppScreen.WALLETS -> WalletsScreen(viewModel)
-                        AppScreen.STORE -> StoreScreenWrapper(viewModel)
-                        AppScreen.SETTINGS -> SettingsScreen(viewModel)
-                        AppScreen.MUSIC_SETTINGS -> MusicSettingsScreen(viewModel)
-                        AppScreen.NOTIFICATIONS -> NotificationsScreen(viewModel)
-                        AppScreen.RANKING -> RankingsScreen(viewModel)
+            ) {
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    topBar = {
+                        TopGameAppBar(
+                            title = when (activeScreen) {
+                                AppScreen.MAIN_MENU -> "DRAUGHTS COMBAT"
+                                AppScreen.OFFLINE_MENU -> "OFFLINE ARENA"
+                                AppScreen.ONLINE_MENU -> "MULTIPLAYER GATEWAY"
+                                AppScreen.GAME_SETUP -> "MATCH REGULATION SETUP"
+                                AppScreen.GAME_BOT -> "CAMPAIGN: VS ${viewModel.currentBotPersona.name.replace("_", " ").uppercase()}"
+                                AppScreen.GAME_LOCAL_PVP -> "LOCAL PASS & PLAY"
+                                AppScreen.GAME_ONLINE_PVP -> "ONLINE 1V1 COMBAT"
+                                AppScreen.ONLINE_COMPETITIONS -> "CHAMPIONSHIP CUPS"
+                                AppScreen.WALLETS -> "SECURE LEDGER COIN WALLET"
+                                AppScreen.STORE -> "TACTICAL SKIN STORE"
+                                AppScreen.SETTINGS -> "SYSTEM REGULATIONS"
+                                AppScreen.MUSIC_SETTINGS -> "ORCHESTRA SOUND STUDIO"
+                                AppScreen.NOTIFICATIONS -> "COMMS & ALERTS"
+                                AppScreen.RANKING -> "GRANDMASTER LEADERBOARD"
+                                AppScreen.ONLINE_CHALLENGES -> "DIRECT CHALLENGE LOBBY"
+                            },
+                            viewModel = viewModel,
+                            onMenuClick = {
+                                coroutineScope.launch { drawerState.open() }
+                                viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                            },
+                            showBackButton = when (activeScreen) {
+                                AppScreen.MAIN_MENU, AppScreen.OFFLINE_MENU, AppScreen.ONLINE_MENU, AppScreen.RANKING -> false
+                                else -> true
+                            },
+                            onBackClick = {
+                                viewModel.navigateBack()
+                                viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                            }
+                        )
+                    },
+                    bottomBar = {
+                        GameBottomNavigation(
+                            currentScreen = activeScreen,
+                            onTabSelected = { screen ->
+                                viewModel.navigateTo(screen)
+                                viewModel.playSfx(SoundManager.Sfx.NOTIFICATION)
+                            }
+                        )
                     }
-                }
-
-                // Dragging chat overlay button in bots or online match mode
-                if (activeScreen == AppScreen.GAME_BOT || activeScreen == AppScreen.GAME_ONLINE_PVP) {
-                    DraggableChatWidget(viewModel = viewModel)
-                }
-
-                // Cinematic Combat Screen Overlay
-                viewModel.activeCombat?.let { combat ->
-                    CombatOverlay(combat = combat)
-                }
-
-                // Profile Management Dialog Overlay
-                if (viewModel.isProfileDialogOpen) {
-                    ProfileManagementDialog(viewModel = viewModel)
-                }
-
-                // Google Auth Handshake / Account Selector Dialog Overlay
-                if (viewModel.isGoogleAuthDialogOpen) {
-                    GoogleAuthenticationDialog(viewModel = viewModel)
-                }
-
-                // Game Rules & Help Dialog Overlay
-                if (viewModel.isRulesDialogOpen) {
-                    GameRulesHelpDialog(viewModel = viewModel)
-                }
-
-                // Premium Payment Portal Dialog Overlay
-                if (viewModel.isPaymentPortalOpen) {
-                    PremiumPaymentPortalDialog(viewModel = viewModel)
-                }
-
-                // Floating Active System Notification Banner HUD Card
-                viewModel.activeNotificationBanner?.let { bannerMessage ->
+                ) { innerPadding ->
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp, start = 16.dp, end = 16.dp)
-                            .align(Alignment.TopCenter)
-                            .animateContentSize()
+                            .fillMaxSize()
+                            .padding(innerPadding)
                     ) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = RedCrimson),
-                            border = BorderStroke(1.dp, AmberGold),
-                            shape = RoundedCornerShape(12.dp),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        when (activeScreen) {
+                            AppScreen.MAIN_MENU -> MainMenuScreen(viewModel)
+                            AppScreen.OFFLINE_MENU -> OfflineMenuScreen(viewModel)
+                            AppScreen.ONLINE_MENU -> OnlineMenuScreen(viewModel)
+                            AppScreen.GAME_SETUP -> GameSetupScreen(viewModel)
+                            AppScreen.GAME_BOT -> OfflineBotGameScreen(viewModel)
+                            AppScreen.GAME_LOCAL_PVP -> OfflineLocalGameScreen(viewModel)
+                            AppScreen.GAME_ONLINE_PVP -> OnlinePvPGameScreen(viewModel)
+                            AppScreen.ONLINE_COMPETITIONS -> OnlineCompetitionsScreen(viewModel)
+                            AppScreen.WALLETS -> WalletsScreen(viewModel)
+                            AppScreen.STORE -> StoreScreenWrapper(viewModel)
+                            AppScreen.SETTINGS -> SettingsScreen(viewModel)
+                            AppScreen.MUSIC_SETTINGS -> MusicSettingsScreen(viewModel)
+                            AppScreen.NOTIFICATIONS -> NotificationsScreen(viewModel)
+                            AppScreen.RANKING -> RankingsScreen(viewModel)
+                            AppScreen.ONLINE_CHALLENGES -> OnlineChallengesScreen(viewModel)
+                        }
+                    }
+                }
+            }
+
+            // --- TOP MOST OVERLAYS & ALERTS LAYER (NEVER COVERED BY BOTTOM NAV OR DRAWERS) ---
+            // Dragging chat overlay button in bots or online match mode
+            if (activeScreen == AppScreen.GAME_BOT || activeScreen == AppScreen.GAME_ONLINE_PVP) {
+                DraggableChatWidget(viewModel = viewModel)
+            }
+
+            // Cinematic Combat Screen Overlay
+            viewModel.activeCombat?.let { combat ->
+                CombatOverlay(combat = combat)
+            }
+
+            // Profile Management Dialog Overlay
+            if (viewModel.isProfileDialogOpen) {
+                ProfileManagementDialog(viewModel = viewModel)
+            }
+
+            // Google Auth Handshake / Account Selector Dialog Overlay
+            if (viewModel.isGoogleAuthDialogOpen) {
+                GoogleAuthenticationDialog(viewModel = viewModel)
+            }
+
+            // Game Rules & Help Dialog Overlay
+            if (viewModel.isRulesDialogOpen) {
+                GameRulesHelpDialog(viewModel = viewModel)
+            }
+
+            // Premium Payment Portal Dialog Overlay
+            if (viewModel.isPaymentPortalOpen) {
+                PremiumPaymentPortalDialog(viewModel = viewModel)
+            }
+
+            // Floating Active System Notification Banner HUD Card
+            viewModel.activeNotificationBanner?.let { bannerMessage ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, start = 16.dp, end = 16.dp)
+                        .align(Alignment.TopCenter)
+                        .animateContentSize()
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = RedCrimson),
+                        border = BorderStroke(1.dp, AmberGold),
+                        shape = RoundedCornerShape(12.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.NotificationsActive,
-                                    contentDescription = "Notification",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Text(
-                                    text = bannerMessage,
-                                    color = Color.White,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.Default.NotificationsActive,
+                                contentDescription = "Notification",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = bannerMessage,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
                     }
                 }
@@ -3578,12 +3890,22 @@ fun GameHeader(playerState: PlayerState?, viewModel: GameViewModel) {
                         .background(avatarColor),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        avatarIcon,
-                        contentDescription = "Avatar",
-                        tint = DarkBg,
-                        modifier = Modifier.size(22.dp)
-                    )
+                    val photo = playerState?.photoUri
+                    if (photo != null) {
+                        coil.compose.AsyncImage(
+                            model = photo,
+                            contentDescription = "Profile Photo",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            avatarIcon,
+                            contentDescription = "Avatar",
+                            tint = DarkBg,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
@@ -3730,7 +4052,7 @@ fun BattleScreen(viewModel: GameViewModel) {
                         Text(
                             text = when (viewModel.selectedGameMode) {
                                 GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "🎮 LOCAL: PASS & PLAY"
-                                GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "🤖 OFFLINE: VS BOT"
+                                GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "🔮 OFFLINE: CAMPAIGN"
                                 GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "⚔️ ONLINE: VS PLAYERS"
                                 GameViewModel.SelectedGameMode.COMPETITIONS -> "🏆 COMPETITIONS"
                             },
@@ -3817,7 +4139,7 @@ fun BattleScreen(viewModel: GameViewModel) {
                 
                 Text(
                     text = when (viewModel.selectedGameMode) {
-                        GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "Battle the local AI bot offline for casual training."
+                        GameViewModel.SelectedGameMode.OFFLINE_VS_BOT -> "Battle the shadow commanders offline for grandmaster training."
                         GameViewModel.SelectedGameMode.LOCAL_PASS_AND_PLAY -> "Play with a friend locally on the same device. No account link required."
                         GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING -> "Real matchmaking — get paired with another real signed-in player."
                         GameViewModel.SelectedGameMode.COMPETITIONS -> "Real tournaments organized by real players — bracket or league, whichever the organizer picks."
@@ -4247,10 +4569,34 @@ fun CheckersBoardComponent(
     }
 
     val boardBorder = when (skin) {
-        "neon" -> BorderStroke(2.dp, VioletNeon)
-        "cyberpunk" -> BorderStroke(2.dp, AmberGold)
-        else -> BorderStroke(3.dp, DarkSurfaceVariant)
+        "neon" -> BorderStroke(2.5.dp, Brush.linearGradient(listOf(VioletNeon, Color.Cyan)))
+        "cyberpunk" -> BorderStroke(2.5.dp, Brush.linearGradient(listOf(AmberGold, RedCrimson)))
+        else -> BorderStroke(3.dp, Brush.linearGradient(listOf(DarkSurfaceVariant, DarkBg)))
     }
+
+    val mandatoryJumpPieceIds = remember(viewModel.boardPieces, viewModel.turnRed) {
+        viewModel.getPiecesWithMandatoryJumps()
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "mandatory_jump_pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_scale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 0.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_alpha"
+    )
 
     Box(
         modifier = Modifier
@@ -4271,6 +4617,7 @@ fun CheckersBoardComponent(
 
                         val pieceOnSquare = viewModel.boardPieces.firstOrNull { it.row == row && it.col == col }
                         val isSelected = viewModel.selectedPiece?.id == pieceOnSquare?.id && pieceOnSquare != null
+                        val isMandatoryJump = pieceOnSquare != null && mandatoryJumpPieceIds.contains(pieceOnSquare.id)
 
                         // Check if this square is a highlight target
                         val isTargetMove = viewModel.validMoves.contains(Pair(row, col))
@@ -4314,6 +4661,19 @@ fun CheckersBoardComponent(
                                 val pieceColor = if (pieceOnSquare.isRed) RedCrimson else VioletNeon
                                 val glowColor = if (pieceOnSquare.isRed) AmberGold else Color.Cyan
 
+                                if (isMandatoryJump) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize(0.85f)
+                                            .graphicsLayer {
+                                                scaleX = pulseScale
+                                                scaleY = pulseScale
+                                                alpha = pulseAlpha
+                                            }
+                                            .border(2.5.dp, Color(0xFFFF1744), CircleShape)
+                                    )
+                                }
+
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize(0.85f)
@@ -4328,8 +4688,8 @@ fun CheckersBoardComponent(
                                             )
                                         )
                                         .border(
-                                            width = if (isSelected) 3.dp else 1.5.dp,
-                                            color = if (isSelected) glowColor else pieceColor.copy(alpha = 0.5f),
+                                            width = if (isSelected) 3.dp else (if (isMandatoryJump) 3.dp else 1.5.dp),
+                                            color = if (isSelected) glowColor else (if (isMandatoryJump) Color(0xFFFF1744) else pieceColor.copy(alpha = 0.5f)),
                                             shape = CircleShape
                                         )
                                         .padding(if (pieceOnSquare.isKing) 6.dp else 4.dp),
@@ -4337,6 +4697,25 @@ fun CheckersBoardComponent(
                                 ) {
                                     // Custom Pixel Character Drawing
                                     HeroDrawing(heroId = pieceOnSquare.heroId, isRed = pieceOnSquare.isRed)
+
+                                    // Mandatory Capture badge overlay (alert icon)
+                                    if (isMandatoryJump) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .align(Alignment.TopStart)
+                                                .background(Color(0xFFFF1744), CircleShape)
+                                                .border(1.dp, Color.White, CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                Icons.Default.PriorityHigh,
+                                                contentDescription = "Must Capture",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(11.dp)
+                                            )
+                                        }
+                                    }
 
                                     // Crown indicator if King promoted
                                     if (pieceOnSquare.isKing) {
@@ -4583,10 +4962,12 @@ fun StoreScreen(viewModel: GameViewModel) {
                     val isEquipped = selectedSkin == skinId
 
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                         border = BorderStroke(
-                            1.5.dp,
-                            if (isEquipped) AmberGold else if (isUnlocked) TextMuted else Color(0x11FFFFFF)
+                            1.2.dp,
+                            if (isEquipped) Brush.linearGradient(listOf(AmberGold, AmberGold.copy(alpha = 0.2f)))
+                            else if (isUnlocked) SolidColor(TextMuted)
+                            else SolidColor(Color(0x11FFFFFF))
                         ),
                         modifier = Modifier
                             .weight(1f)
@@ -4597,6 +4978,10 @@ fun StoreScreen(viewModel: GameViewModel) {
                                     viewModel.purchaseSkin(skinId, cost)
                                 }
                             }
+                            .background(
+                                Brush.verticalGradient(listOf(DarkSurface, Color(0xFF0F111A))),
+                                shape = RoundedCornerShape(12.dp)
+                            )
                             .testTag("skin_$skinId")
                     ) {
                         Column(
@@ -4651,8 +5036,12 @@ fun StoreScreen(viewModel: GameViewModel) {
                     val isUnlocked = styleId == "classic" || coinCount >= cost // Simplification for board styles
 
                     Card(
-                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                        border = BorderStroke(1.5.dp, if (isEquipped) AmberGold else Color(0x11FFFFFF)),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                        border = BorderStroke(
+                            1.2.dp,
+                            if (isEquipped) Brush.linearGradient(listOf(AmberGold, AmberGold.copy(alpha = 0.2f)))
+                            else SolidColor(Color(0x11FFFFFF))
+                        ),
                         modifier = Modifier
                             .weight(1f)
                             .clickable {
@@ -4660,6 +5049,10 @@ fun StoreScreen(viewModel: GameViewModel) {
                                     viewModel.selectBoardStyle(styleId)
                                 }
                             }
+                            .background(
+                                Brush.verticalGradient(listOf(DarkSurface, Color(0xFF0F111A))),
+                                shape = RoundedCornerShape(12.dp)
+                            )
                             .testTag("board_$styleId")
                     ) {
                         Column(
@@ -6131,7 +6524,33 @@ fun CombatCharacterCard(
 fun ProfileManagementDialog(viewModel: GameViewModel) {
     val playerState by viewModel.playerState.collectAsState()
     var tempName by remember { mutableStateOf(playerState?.playerName ?: "") }
+    var tempTagline by remember { mutableStateOf(playerState?.tagline ?: "Tactical Overlord") }
+    var tempPhoneNumber by remember { mutableStateOf(playerState?.phoneNumber ?: "") }
+    var tempCountryCode by remember { mutableStateOf(playerState?.countryCode ?: "+256") }
+    var tempPhotoUri by remember { mutableStateOf(playerState?.photoUri) }
+    var showCountryDropdown by remember { mutableStateOf(false) }
     val context = LocalContext.current
+
+    val countryCodes = listOf(
+        Pair("🇺🇬", "+256"),
+        Pair("🇺🇸", "+1"),
+        Pair("🇬🇧", "+44"),
+        Pair("🇰🇪", "+254"),
+        Pair("🇳🇬", "+234"),
+        Pair("🇮🇳", "+91"),
+        Pair("🇿🇦", "+27"),
+        Pair("🇩🇪", "+49"),
+        Pair("🇫🇷", "+33"),
+        Pair("🇨🇦", "+1")
+    )
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            tempPhotoUri = uri.toString()
+        }
+    }
 
     Dialog(
         onDismissRequest = { viewModel.isProfileDialogOpen = false },
@@ -6168,6 +6587,80 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
                         modifier = Modifier.size(24.dp)
                     ) {
                         Icon(Icons.Default.Close, contentDescription = "Close", tint = TextMuted)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Profile Photo Section - Dynamic & Modern
+                Text(
+                    text = "PROFILE PHOTO",
+                    color = TextWhite,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Box(
+                    modifier = Modifier
+                        .size(90.dp)
+                        .clip(CircleShape)
+                        .background(DarkBg)
+                        .border(2.dp, AmberGold, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (tempPhotoUri != null) {
+                        coil.compose.AsyncImage(
+                            model = tempPhotoUri,
+                            contentDescription = "Profile Photo Preview",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        )
+                    } else {
+                        // Fallback icon based on selected avatar
+                        val fallbackIcon = when (viewModel.selectedAvatarId) {
+                            "knight" -> Icons.Default.Shield
+                            "mage" -> Icons.Default.AutoAwesome
+                            "valkyrie" -> Icons.Default.LocalActivity
+                            "assassin" -> Icons.Default.Security
+                            "rogue" -> Icons.Default.Bolt
+                            else -> Icons.Default.Person
+                        }
+                        Icon(
+                            fallbackIcon,
+                            contentDescription = "Fallback Avatar",
+                            tint = AmberGold,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.wrapContentWidth()
+                ) {
+                    Button(
+                        onClick = { photoPickerLauncher.launch("image/*") },
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Text("SELECT PHOTO", color = DarkBg, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    if (tempPhotoUri != null) {
+                        Button(
+                            onClick = { tempPhotoUri = null },
+                            colors = ButtonDefaults.buttonColors(containerColor = RedCrimson),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text("CLEAR", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -6244,14 +6737,127 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
 
                 Spacer(modifier = Modifier.height(6.dp))
 
+                OutlinedTextField(
+                    value = tempName,
+                    onValueChange = { tempName = it },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AmberGold,
+                        unfocusedBorderColor = Color.DarkGray,
+                        focusedContainerColor = DarkBg,
+                        unfocusedContainerColor = DarkBg
+                    ),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Custom Tagline
+                Text(
+                    text = "CUSTOM TAGLINE",
+                    color = TextWhite,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedTextField(
+                    value = tempTagline,
+                    onValueChange = { tempTagline = it },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AmberGold,
+                        unfocusedBorderColor = Color.DarkGray,
+                        focusedContainerColor = DarkBg,
+                        unfocusedContainerColor = DarkBg
+                    ),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                    placeholder = { Text("e.g. Tactical Overlord", color = Color.Gray, fontSize = 13.sp) }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Phone number and Country code
+                Text(
+                    text = "PHONE NUMBER & COUNTRY CODE",
+                    color = TextWhite,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .background(DarkBg, RoundedCornerShape(8.dp))
+                            .border(1.dp, Color.DarkGray, RoundedCornerShape(8.dp))
+                            .clickable { showCountryDropdown = true }
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val currentCountry = countryCodes.find { it.second == tempCountryCode }
+                            Text(
+                                text = "${currentCountry?.first ?: "🇺🇬"} $tempCountryCode",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.ArrowDropDown,
+                                contentDescription = "Dropdown",
+                                tint = AmberGold,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = showCountryDropdown,
+                            onDismissRequest = { showCountryDropdown = false },
+                            modifier = Modifier.background(DarkSurface)
+                        ) {
+                            countryCodes.forEach { country ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "${country.first}  ${country.second}",
+                                            color = Color.White,
+                                            fontSize = 13.sp
+                                        )
+                                    },
+                                    onClick = {
+                                        tempCountryCode = country.second
+                                        showCountryDropdown = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
                     OutlinedTextField(
-                        value = tempName,
-                        onValueChange = { tempName = it },
+                        value = tempPhoneNumber,
+                        onValueChange = { tempPhoneNumber = it },
                         singleLine = true,
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone
+                        ),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
                             unfocusedTextColor = Color.White,
@@ -6261,22 +6867,33 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
                             unfocusedContainerColor = DarkBg
                         ),
                         modifier = Modifier.weight(1f).height(48.dp),
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp),
+                        placeholder = { Text("700000000", color = Color.Gray, fontSize = 13.sp) }
                     )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Button(
+                    onClick = {
+                        if (tempName.trim().length >= 3) {
+                            viewModel.updateFullProfile(
+                                newName = tempName.trim(),
+                                newTagline = tempTagline.trim(),
+                                newPhoneNumber = tempPhoneNumber.trim(),
+                                newCountryCode = tempCountryCode,
+                                newPhotoUri = tempPhotoUri
+                            )
+                        } else {
+                            viewModel.triggerNotification("Name must be at least 3 characters!")
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = "Save", tint = DarkBg, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            if (tempName.trim().length >= 3) {
-                                viewModel.updatePlayerName(tempName.trim())
-                            } else {
-                                viewModel.triggerNotification("Name must be at least 3 characters!")
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
-                        modifier = Modifier.height(48.dp)
-                    ) {
-                        Text("SAVE", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Text("SAVE PROFILE CHANGES", color = DarkBg, fontSize = 12.sp, fontWeight = FontWeight.Black)
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -7177,5 +7794,280 @@ private fun queryFileDisplayName(context: android.content.Context, uri: android.
         }
     } catch (_: Exception) {
         null
+    }
+}
+
+@Composable
+fun OnlineChallengesScreen(viewModel: GameViewModel) {
+    val onlinePlayers = viewModel.onlinePresencePlayers
+    val incoming = viewModel.incomingChallenges
+    val outgoing = viewModel.outgoingChallenges
+    val isSigned = viewModel.isGoogleSignedIn
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        if (!isSigned) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                border = BorderStroke(1.dp, Color(0x33FF9800)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = null,
+                        tint = Color(0xFFFF9800),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = "SIGN IN REQUIRED",
+                        color = Color(0xFFFF9800),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        text = "You are currently playing as a Guest. Direct online challenges are only available when signed into a Google Account.",
+                        color = TextWhite,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            return@Column
+        }
+
+        // 1. Incoming Challenges Section
+        if (incoming.isNotEmpty()) {
+            Text(
+                text = "INCOMING CHALLENGE REQUESTS",
+                color = Color(0xFF00E676),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            )
+            incoming.forEach { challenge ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF171A2E)),
+                    border = BorderStroke(1.5.dp, Color(0xFF00E676)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(14.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "⚔️ CHALLENGE FROM ${challenge.senderName}",
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Mode: ${challenge.ruleSystem.replace('_', ' ')}",
+                                color = TextGray,
+                                fontSize = 10.sp
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = { viewModel.respondToIncomingChallenge(challenge.requestId, false, challenge.ruleSystem) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text("DECLINE", color = TextWhite, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { viewModel.respondToIncomingChallenge(challenge.requestId, true, challenge.ruleSystem) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E676)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(30.dp)
+                            ) {
+                                Text("ACCEPT", color = Color.Black, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Outgoing Challenges Section
+        if (outgoing.isNotEmpty()) {
+            Text(
+                text = "YOUR ACTIVE SENT REQUESTS",
+                color = AmberGold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 1.sp
+            )
+            outgoing.forEach { challenge ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                    border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Challenge to ${challenge.receiverName}",
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Status: ${challenge.status} | Mode: ${challenge.ruleSystem.replace('_', ' ')}",
+                                color = TextGray,
+                                fontSize = 10.sp
+                            )
+                        }
+                        CircularProgressIndicator(
+                            color = AmberGold,
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    }
+                }
+            }
+        }
+
+        // 3. All Online Players Section
+        Text(
+            text = "ALL ONLINE PLAYERS",
+            color = Color(0xFFFF9800),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Black,
+            letterSpacing = 1.sp
+        )
+
+        if (onlinePlayers.isEmpty()) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                border = BorderStroke(1.dp, Color(0x11FFFFFF)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.Public, contentDescription = null, tint = TextGray, modifier = Modifier.size(36.dp))
+                        Text(
+                            text = "No other players are currently online.",
+                            color = TextGray,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Text(
+                            text = "Invite friends or wait for grandmasters to connect!",
+                            color = TextGray.copy(alpha = 0.6f),
+                            fontSize = 10.sp,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        } else {
+            onlinePlayers.forEach { player ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF171A2E)),
+                    border = BorderStroke(1.dp, if (player.inGame) Color(0x22FFFFFF) else Color(0x44FF9800)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(14.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            // Online Indicator
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .background(
+                                        color = if (player.inGame) Color(0xFFE53935) else Color(0xFF00E676),
+                                        shape = CircleShape
+                                    )
+                            )
+                            Column {
+                                Text(
+                                    text = player.name,
+                                    color = TextWhite,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Rating: ${player.mmr} MMR | Mode: ${player.ruleSystem.replace('_', ' ')}",
+                                    color = TextGray,
+                                    fontSize = 10.sp
+                                )
+                                if (player.inGame) {
+                                    Text(
+                                        text = "CURRENTLY IN BATTLE ⚔️",
+                                        color = Color(0xFFE53935),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                } else {
+                                    Text(
+                                        text = "READY FOR BATTLE 🎮",
+                                        color = Color(0xFF00E676),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                }
+                            }
+                        }
+                        Button(
+                            onClick = { viewModel.sendDirectChallenge(player.uid, player.name) },
+                            enabled = !player.inGame,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFFFF9800),
+                                disabledContainerColor = Color(0x33FFFFFF)
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(32.dp)
+                        ) {
+                            Text(
+                                text = if (player.inGame) "IN GAME" else "CHALLENGE",
+                                color = if (player.inGame) TextGray else Color.Black,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }

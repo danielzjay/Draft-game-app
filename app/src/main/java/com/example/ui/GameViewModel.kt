@@ -89,10 +89,14 @@ enum class AppScreen {
     MUSIC_SETTINGS,
     NOTIFICATIONS,
     RANKING,
-    GAME_SETUP
+    GAME_SETUP,
+    ONLINE_CHALLENGES
 }
 
-class GameViewModel(private val repository: GameRepository) : ViewModel() {
+class GameViewModel(
+    private val repository: GameRepository,
+    private val application: android.app.Application
+) : ViewModel() {
 
     // Centralized Navigation state
     var currentScreen by mutableStateOf(AppScreen.MAIN_MENU)
@@ -229,9 +233,34 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
+    fun updateFullProfile(
+        newName: String,
+        newTagline: String,
+        newPhoneNumber: String,
+        newCountryCode: String,
+        newPhotoUri: String?
+    ) {
+        viewModelScope.launch {
+            val state = playerState.value ?: PlayerState()
+            val updated = state.copy(
+                playerName = newName,
+                tagline = newTagline,
+                phoneNumber = newPhoneNumber,
+                countryCode = newCountryCode,
+                photoUri = newPhotoUri
+            )
+            repository.updatePlayerState(updated)
+            triggerNotification("Tactical profile updated successfully!")
+        }
+    }
+
     fun selectAvatar(avatarId: String) {
         selectedAvatarId = avatarId
-        triggerNotification("Profile avatar updated!")
+        viewModelScope.launch {
+            val state = playerState.value ?: com.example.data.PlayerState()
+            repository.updatePlayerState(state.copy(photoUri = avatarId))
+            triggerNotification("Profile avatar updated!")
+        }
     }
 
     // --- GAME RULES & HELP SYSTEM ---
@@ -471,6 +500,8 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     val customMusicPlaylistNames = mutableStateListOf<String>()
     var playbackSpeed by mutableStateOf(1.0f)
     var isBeatOverlayActive by mutableStateOf(false)
+    var isStreamingOpponentMusic by mutableStateOf(false)
+    var streamingSongName by mutableStateOf("")
 
     // --- CUSTOM GAME RULES ---
     var ruleSystem by mutableStateOf(DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION)
@@ -547,6 +578,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     var waitingPlayers by mutableStateOf<List<com.example.network.QueueEntry>>(emptyList())
     private var waitingPlayersJob: kotlinx.coroutines.Job? = null
+
+    var onlinePresencePlayers by mutableStateOf<List<com.example.network.OnlinePlayerPresence>>(emptyList())
+    var incomingChallenges by mutableStateOf<List<com.example.network.DirectChallenge>>(emptyList())
+    var outgoingChallenges by mutableStateOf<List<com.example.network.DirectChallenge>>(emptyList())
     // Bots are for OFFLINE play, or as an explicit online fallback when nobody real is
     // available — never a silent substitute for a real opponent. This flips on only after
     // real matchmaking has had a fair chance (30s) to find someone.
@@ -611,6 +646,43 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
+    fun sendDirectChallenge(receiverUid: String, receiverName: String) {
+        viewModelScope.launch {
+            val result = com.example.network.OnlineMatchRepository.sendDirectChallenge(receiverUid, receiverName, ruleSystem.name)
+            if (result.isSuccess) {
+                triggerNotification("Challenge sent to $receiverName!")
+            } else {
+                triggerNotification("Failed to send challenge: ${result.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    fun respondToIncomingChallenge(requestId: String, accept: Boolean, ruleSystemName: String) {
+        viewModelScope.launch {
+            if (accept) {
+                if (currentScreen == AppScreen.GAME_ONLINE_PVP && activeOnlineMatch != null) {
+                    triggerNotification("Cannot accept challenge while in an ongoing match!")
+                    return@launch
+                }
+                val result = com.example.network.OnlineMatchRepository.respondToChallenge(requestId, true, ruleSystemName)
+                if (result.isSuccess) {
+                    val matchId = result.getOrNull()
+                    if (matchId != null) {
+                        triggerNotification("Challenge accepted! Entering battle...")
+                        com.example.network.OnlineMatchRepository.clearChallenge(requestId)
+                        onRealMatchFound(matchId)
+                    }
+                } else {
+                    triggerNotification("Failed to accept challenge: ${result.exceptionOrNull()?.message}")
+                }
+            } else {
+                com.example.network.OnlineMatchRepository.respondToChallenge(requestId, false, ruleSystemName)
+                com.example.network.OnlineMatchRepository.clearChallenge(requestId)
+                triggerNotification("Challenge declined.")
+            }
+        }
+    }
+
     /** Explicit fallback ONLY — never automatic. The player chose this after real matchmaking came up empty. */
     fun fallBackToBotMatch() {
         cancelRealMatchmaking()
@@ -623,6 +695,9 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         waitingPlayersJob?.cancel()
         matchmakingJob?.cancel()
         observeRealMatch(matchId)
+        if (currentScreen != AppScreen.GAME_ONLINE_PVP) {
+            navigateTo(AppScreen.GAME_ONLINE_PVP)
+        }
     }
 
     fun cancelRealMatchmaking() {
@@ -643,7 +718,11 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     return@collect
                 }
                 val checked = com.example.network.OnlineMatchRepository.checkAndApplyTimeout(match)
+                val oldMatchId = activeOnlineMatch?.matchId
                 activeOnlineMatch = checked
+                if (checked.matchId != oldMatchId) {
+                    syncMySongToActiveMatch()
+                }
             }
         }
     }
@@ -725,8 +804,33 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
+    fun getPiecesWithMandatoryJumps(): List<String> {
+        if (!ruleForcedJumps || winnerMessage != null || activeCombat != null || isBotThinking) return emptyList()
+        val myColorPieces = boardPieces.filter { it.isRed == turnRed }
+        val piecesWithJumps = myColorPieces.filter { getMovesAndJumpsForPieceRaw(it).second.isNotEmpty() }
+        if (piecesWithJumps.isEmpty()) return emptyList()
+
+        if (ruleSystem == DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION) {
+            val globalMax = myColorPieces.maxOfOrNull { pieceMaxCaptures(it) } ?: 0
+            if (globalMax > 0) {
+                return piecesWithJumps.filter { pieceMaxCaptures(it) == globalMax }.map { it.id }
+            }
+        }
+        return piecesWithJumps.map { it.id }
+    }
+
+    fun getOnlinePiecesWithMandatoryJumps(match: com.example.network.OnlineMatch): List<String> {
+        val uid = myUid ?: return emptyList()
+        if (match.status != com.example.network.MatchStatus.ACTIVE) return emptyList()
+        if (match.turnUid != uid) return emptyList()
+        val myIsRed = match.player1Uid == uid
+        val myPieces = match.board.filter { it.isRed == myIsRed }
+        val piecesWithJumps = myPieces.filter { onlineMovesAndJumpsRaw(it, match.board).second.isNotEmpty() }
+        return piecesWithJumps.map { it.id }
+    }
+
     /** Minimal rules engine mirror for the plain (no hero/HP layer) online board. */
-    private fun onlineMovesAndJumps(piece: com.example.network.OnlineBoardPiece, board: List<com.example.network.OnlineBoardPiece>): Pair<List<Pair<Int, Int>>, List<Pair<Int, Int>>> {
+    fun onlineMovesAndJumps(piece: com.example.network.OnlineBoardPiece, board: List<com.example.network.OnlineBoardPiece>): Pair<List<Pair<Int, Int>>, List<Pair<Int, Int>>> {
         val size = ruleSystem.boardSize
         val flying = ruleFlyingKings && piece.isKing
         val dirs = listOf(Pair(-1, -1), Pair(-1, 1), Pair(1, -1), Pair(1, 1))
@@ -838,10 +942,27 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
-    fun createTournament(name: String, format: String, startsAt: Long) {
+    fun createTournament(
+        name: String, 
+        format: String, 
+        startsAt: Long,
+        ruleSystemName: String,
+        winnerReward: Int,
+        finalLoserReward: Int,
+        semiFinalLoserReward: Int
+    ) {
         val organizerName = playerState.value?.playerName ?: "Organizer"
         viewModelScope.launch {
-            val result = com.example.network.TournamentRepository.createTournament(name, format, ruleSystem.name, organizerName, startsAt)
+            val result = com.example.network.TournamentRepository.createTournament(
+                name = name, 
+                format = format, 
+                ruleSystem = ruleSystemName, 
+                organizerName = organizerName, 
+                startsAt = startsAt,
+                winnerReward = winnerReward,
+                finalLoserReward = finalLoserReward,
+                semiFinalLoserReward = semiFinalLoserReward
+            )
             result.onSuccess { id -> openTournament(id) }
             result.onFailure { triggerNotification(it.message ?: "Couldn't create tournament.") }
         }
@@ -849,10 +970,21 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
 
     fun openTournament(tournamentId: String) {
         viewModelScope.launch {
-            com.example.network.TournamentRepository.observeTournament(tournamentId).collect { currentTournament = it }
+            com.example.network.TournamentRepository.observeTournament(tournamentId).collect { t ->
+                currentTournament = t
+                if (t != null) {
+                    checkAndAwardTournamentRewards(t, currentFixtures)
+                }
+            }
         }
         viewModelScope.launch {
-            com.example.network.TournamentRepository.observeFixtures(tournamentId).collect { currentFixtures = it }
+            com.example.network.TournamentRepository.observeFixtures(tournamentId).collect { f ->
+                currentFixtures = f
+                val t = currentTournament
+                if (t != null) {
+                    checkAndAwardTournamentRewards(t, f)
+                }
+            }
         }
     }
 
@@ -935,7 +1067,12 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
         viewModelScope.launch {
             if (notificationsEnabled) {
+                // Show standard in-app notification banner
                 activeNotificationBanner = message
+                
+                // Show real system notification on the phone's status bar!
+                com.example.utils.NotificationHelper.showNotification(application, "Draughts Combat", message)
+
                 delay(4000)
                 if (activeNotificationBanner == message) {
                     activeNotificationBanner = null
@@ -945,7 +1082,78 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
     }
 
     init {
+        // Guarantee initial player state in database if missing
+        viewModelScope.launch {
+            val existing = repository.getPlayerStateDirect()
+            if (existing == null) {
+                repository.updatePlayerState(com.example.data.PlayerState(id = 1))
+            }
+        }
         restoreGoogleSession()
+        
+        // Sync avatar selection with player state
+        viewModelScope.launch {
+            playerState.collect { state ->
+                if (state != null) {
+                    selectedAvatarId = state.photoUri ?: "knight"
+                }
+            }
+        }
+
+        // Online Presence Heartbeat
+        viewModelScope.launch {
+            while (true) {
+                if (isGoogleSignedIn) {
+                    val name = playerState.value?.playerName ?: "Player"
+                    val mmr = playerState.value?.mmr ?: 1200
+                    val rule = ruleSystem.name
+                    val inGame = (currentScreen == AppScreen.GAME_ONLINE_PVP && activeOnlineMatch != null)
+                    com.example.network.OnlineMatchRepository.updatePresence(name, mmr, rule, inGame)
+                }
+                delay(12000) // update every 12 seconds
+            }
+        }
+
+        // Observe Online Players Presence
+        viewModelScope.launch {
+            com.example.network.OnlineMatchRepository.observeOnlinePlayers().collect { list ->
+                onlinePresencePlayers = list
+            }
+        }
+
+        // Observe Incoming Direct Challenges
+        viewModelScope.launch {
+            com.example.network.OnlineMatchRepository.observeIncomingChallenges().collect { list ->
+                val oldIncomingIds = incomingChallenges.map { it.requestId }.toSet()
+                incomingChallenges = list
+                
+                // Trigger notification on new challenges
+                val newChallenges = list.filter { it.requestId !in oldIncomingIds && it.status == "PENDING" }
+                for (challenge in newChallenges) {
+                    val msg = "⚔️ New direct challenge from ${challenge.senderName}! Mode: ${challenge.ruleSystem.replace('_', ' ')}"
+                    triggerAppNotification(msg, AppScreen.ONLINE_CHALLENGES)
+                }
+            }
+        }
+
+        // Observe Outgoing Direct Challenges
+        viewModelScope.launch {
+            com.example.network.OnlineMatchRepository.observeOutgoingChallenges().collect { list ->
+                outgoingChallenges = list
+                val accepted = list.firstOrNull { it.status == "ACCEPTED" && it.matchId != null }
+                if (accepted != null) {
+                    val matchId = accepted.matchId!!
+                    com.example.network.OnlineMatchRepository.clearChallenge(accepted.requestId)
+                    onRealMatchFound(matchId)
+                }
+                val declined = list.firstOrNull { it.status == "DECLINED" }
+                if (declined != null) {
+                    triggerNotification("Challenge to ${declined.receiverName} was declined.")
+                    com.example.network.OnlineMatchRepository.clearChallenge(declined.requestId)
+                }
+            }
+        }
+
         // Reset board once heroes are loaded from database
         viewModelScope.launch {
             heroes.collect { heroList ->
@@ -2229,7 +2437,8 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                 googleSignInError = null
 
                 val state = playerState.value ?: PlayerState()
-                repository.updatePlayerState(state.copy(playerName = name))
+                val finalName = if (state.playerName == "Grandmaster Checkers" || state.playerName == "Guest Vanguard") name else state.playerName
+                repository.updatePlayerState(state.copy(playerName = finalName, syncAccount = email))
 
                 triggerNotification("Signed in as $email")
                 repository.mineNewBlock(
@@ -2292,7 +2501,8 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     
                     val name = email.substringBefore("@")
                     val state = playerState.value ?: PlayerState()
-                    repository.updatePlayerState(state.copy(playerName = name))
+                    val finalName = if (state.playerName == "Grandmaster Checkers" || state.playerName == "Guest Vanguard") name else state.playerName
+                    repository.updatePlayerState(state.copy(playerName = finalName, syncAccount = email))
                     
                     triggerNotification("Account created and signed in as $email")
                     repository.mineNewBlock(
@@ -2317,7 +2527,8 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
                     
                     val name = user.displayName ?: email.substringBefore("@")
                     val state = playerState.value ?: PlayerState()
-                    repository.updatePlayerState(state.copy(playerName = name))
+                    val finalName = if (state.playerName == "Grandmaster Checkers" || state.playerName == "Guest Vanguard") name else state.playerName
+                    repository.updatePlayerState(state.copy(playerName = finalName, syncAccount = email))
                     
                     triggerNotification("Signed in as $email")
                     repository.mineNewBlock(
@@ -2353,7 +2564,7 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
             isGoogleSignedIn = false
             signedInEmail = null
             val state = playerState.value ?: PlayerState()
-            repository.updatePlayerState(state.copy(playerName = "Guest Vanguard"))
+            repository.updatePlayerState(state.copy(syncAccount = ""))
             triggerNotification("Signed out of Cloud Account.")
         }
     }
@@ -2363,8 +2574,11 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         selectedMusicTrack = track.displayName
         customMusicUri = null
         customMusicName = null
+        isStreamingOpponentMusic = false
+        streamingSongName = ""
         track.resId?.let { SoundManager.playBundledMusic(it) }
         triggerNotification("Now playing: ${track.displayName}")
+        syncMySongToActiveMatch()
         viewModelScope.launch {
             val state = playerState.value ?: return@launch
             repository.updatePlayerState(state.copy(customMusicUri = null, customMusicName = null))
@@ -2385,7 +2599,10 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         selectedMusicTrack = displayName
         customMusicUri = uri.toString()
         customMusicName = displayName
+        isStreamingOpponentMusic = false
+        streamingSongName = ""
         triggerNotification("Now playing your song: $displayName")
+        syncMySongToActiveMatch()
         viewModelScope.launch {
             val state = playerState.value ?: return@launch
             repository.updatePlayerState(state.copy(customMusicUri = uri.toString(), customMusicName = displayName))
@@ -2554,14 +2771,152 @@ class GameViewModel(private val repository: GameRepository) : ViewModel() {
         }
     }
 
+    fun syncMySongToActiveMatch() {
+        val match = activeOnlineMatch ?: return
+        val myUid = myUid ?: return
+        val currentSong = selectedMusicTrack
+        viewModelScope.launch {
+            val isPlayer1 = match.player1Uid == myUid
+            val field = if (isPlayer1) "player1Song" else "player2Song"
+            com.example.network.OnlineMatchRepository.updateMatchSong(match.matchId, field, currentSong)
+        }
+    }
+
+    fun startStreamingOpponentMusic(songName: String, context: android.content.Context) {
+        if (songName.isEmpty()) return
+        isStreamingOpponentMusic = true
+        streamingSongName = songName
+        
+        val matchingBundled = bundledMusicTracks.firstOrNull { it.displayName.equals(songName, ignoreCase = true) }
+        if (matchingBundled != null) {
+            matchingBundled.resId?.let { SoundManager.playBundledMusic(it) }
+            triggerNotification("Streaming Opponent's Music: $songName")
+        } else {
+            // Revert or play default track with an overlay notification
+            bundledMusicTracks.firstOrNull()?.resId?.let { SoundManager.playBundledMusic(it) }
+            triggerNotification("Streaming Opponent's Custom Track: $songName")
+        }
+    }
+
+    fun stopStreamingOpponentMusic() {
+        isStreamingOpponentMusic = false
+        streamingSongName = ""
+        val track = bundledMusicTracks.firstOrNull()
+        if (track != null) {
+            track.resId?.let { SoundManager.playBundledMusic(it) }
+            selectedMusicTrack = track.displayName
+        }
+        triggerNotification("Stopped streaming. Reverted to local track.")
+    }
+
+    fun checkAndAwardTournamentRewards(tournament: com.example.network.TournamentInfo, fixtures: List<com.example.network.TournamentFixture>) {
+        if (tournament.status != com.example.network.TournamentStatus.COMPLETED) return
+        val myUid = myUid ?: return
+        
+        val sharedPrefs = application.getSharedPreferences("tournament_rewards", android.content.Context.MODE_PRIVATE)
+        val key = "rewarded_${tournament.tournamentId}"
+        if (sharedPrefs.getBoolean(key, false)) return
+
+        val maxRound = fixtures.maxOfOrNull { it.round } ?: 0
+        if (maxRound == 0) return
+
+        if (tournament.format == com.example.network.TournamentFormat.BRACKET) {
+            val finalFixtures = fixtures.filter { it.round == maxRound }
+            val finalFixture = finalFixtures.firstOrNull { it.player1Uid.isNotEmpty() && it.player2Uid.isNotEmpty() }
+            
+            if (finalFixture != null && finalFixture.status == com.example.network.FixtureStatus.COMPLETED) {
+                val winnerUid = finalFixture.winnerUid
+                val isPlayer1 = finalFixture.player1Uid == myUid
+                val isPlayer2 = finalFixture.player2Uid == myUid
+                
+                if (winnerUid == myUid) {
+                    val reward = tournament.winnerReward
+                    markTournamentAsRewarded(tournament.tournamentId)
+                    awardCoinsAndNotify("Winner of tournament ${tournament.name}!", reward)
+                    return
+                } else if ((isPlayer1 || isPlayer2) && winnerUid != null) {
+                    val reward = tournament.finalLoserReward
+                    markTournamentAsRewarded(tournament.tournamentId)
+                    awardCoinsAndNotify("Runner-up of tournament ${tournament.name}!", reward)
+                    return
+                }
+            }
+
+            if (maxRound > 1) {
+                val semiFinalFixtures = fixtures.filter { it.round == maxRound - 1 }
+                for (fixture in semiFinalFixtures) {
+                    val isPlayer1 = fixture.player1Uid == myUid
+                    val isPlayer2 = fixture.player2Uid == myUid
+                    if (isPlayer1 || isPlayer2) {
+                        if (fixture.status == com.example.network.FixtureStatus.COMPLETED && fixture.winnerUid != myUid) {
+                            val reward = tournament.semiFinalLoserReward
+                            markTournamentAsRewarded(tournament.tournamentId)
+                            awardCoinsAndNotify("Semi-finalist in tournament ${tournament.name}!", reward)
+                            return
+                        }
+                    }
+                }
+            }
+        } else {
+            val points = mutableMapOf<String, Int>()
+            for (f in fixtures) {
+                if (f.status == com.example.network.FixtureStatus.COMPLETED) {
+                    val w = f.winnerUid
+                    if (w != null) {
+                        points[w] = (points[w] ?: 0) + 3
+                    }
+                } else if (f.status == com.example.network.FixtureStatus.BYE) {
+                    if (f.player1Uid.isNotEmpty()) {
+                        points[f.player1Uid] = (points[f.player1Uid] ?: 0) + 3
+                    }
+                }
+            }
+            
+            val standings = points.entries.sortedByDescending { it.value }.map { it.key }
+            if (standings.isNotEmpty() && standings.contains(myUid)) {
+                val rank = standings.indexOf(myUid)
+                if (rank == 0) {
+                    val reward = tournament.winnerReward
+                    markTournamentAsRewarded(tournament.tournamentId)
+                    awardCoinsAndNotify("1st place in League ${tournament.name}!", reward)
+                } else if (rank == 1) {
+                    val reward = tournament.finalLoserReward
+                    markTournamentAsRewarded(tournament.tournamentId)
+                    awardCoinsAndNotify("2nd place in League ${tournament.name}!", reward)
+                } else if (rank == 2) {
+                    val reward = tournament.semiFinalLoserReward
+                    markTournamentAsRewarded(tournament.tournamentId)
+                    awardCoinsAndNotify("3rd place in League ${tournament.name}!", reward)
+                }
+            }
+        }
+    }
+
+    private fun awardCoinsAndNotify(title: String, coins: Int) {
+        if (coins <= 0) return
+        viewModelScope.launch {
+            val state = playerState.value ?: return@launch
+            repository.updatePlayerState(state.copy(draughtCoins = state.draughtCoins + coins))
+            triggerAppNotification("🏆 Tournament Reward! You received +$coins BLC for: $title", AppScreen.RANKING)
+        }
+    }
+
+    private fun markTournamentAsRewarded(tournamentId: String) {
+        val sharedPrefs = application.getSharedPreferences("tournament_rewards", android.content.Context.MODE_PRIVATE)
+        sharedPrefs.edit().putBoolean("rewarded_$tournamentId", true).apply()
+    }
+
 }
 
 // Simple Factory for creating ViewModel with Repository dependency
-class GameViewModelFactory(private val repository: GameRepository) : ViewModelProvider.Factory {
+class GameViewModelFactory(
+    private val repository: GameRepository,
+    private val application: android.app.Application
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(GameViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return GameViewModel(repository) as T
+            return GameViewModel(repository, application) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

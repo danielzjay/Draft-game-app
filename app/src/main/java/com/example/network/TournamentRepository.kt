@@ -26,7 +26,16 @@ object TournamentRepository {
 
     private fun currentUid(): String? = try { FirebaseAuth.getInstance().currentUser?.uid } catch (e: Exception) { null }
 
-    suspend fun createTournament(name: String, format: String, ruleSystem: String, organizerName: String, startsAt: Long): Result<String> {
+    suspend fun createTournament(
+        name: String, 
+        format: String, 
+        ruleSystem: String, 
+        organizerName: String, 
+        startsAt: Long,
+        winnerReward: Int,
+        finalLoserReward: Int,
+        semiFinalLoserReward: Int
+    ): Result<String> {
         val db = dbOrNull ?: return Result.failure(Exception("Firebase is not initialized."))
         val uid = currentUid() ?: return Result.failure(Exception("Sign in with Google to organize a competition."))
         return try {
@@ -43,7 +52,10 @@ object TournamentRepository {
                 "registeredNames" to mapOf(uid to organizerName),
                 "startsAt" to startsAt,
                 "createdAt" to System.currentTimeMillis(),
-                "roundCount" to 0
+                "roundCount" to 0,
+                "winnerReward" to winnerReward,
+                "finalLoserReward" to finalLoserReward,
+                "semiFinalLoserReward" to semiFinalLoserReward
             )
             db.collection(TOURNAMENTS).document(tournamentId).set(data).await()
             Result.success(tournamentId)
@@ -90,10 +102,10 @@ object TournamentRepository {
         return callbackFlow {
             val reg = db.collection(TOURNAMENTS)
                 .whereEqualTo("status", TournamentStatus.REGISTERING)
-                .orderBy("startsAt", Query.Direction.ASCENDING)
-                .limit(30)
                 .addSnapshotListener { snap, _ ->
-                    val list = snap?.documents?.mapNotNull { docToTournament(it.id, it.data) } ?: emptyList()
+                    val list = snap?.documents?.mapNotNull { docToTournament(it.id, it.data) }
+                        ?.sortedBy { it.startsAt }
+                        ?.take(30) ?: emptyList()
                     trySend(list)
                 }
             awaitClose { reg.remove() }
@@ -105,9 +117,9 @@ object TournamentRepository {
         return callbackFlow {
             val reg = db.collection(FIXTURES)
                 .whereEqualTo("tournamentId", tournamentId)
-                .orderBy("round", Query.Direction.ASCENDING)
                 .addSnapshotListener { snap, _ ->
-                    val list = snap?.documents?.mapNotNull { docToFixture(it.id, it.data) } ?: emptyList()
+                    val list = snap?.documents?.mapNotNull { docToFixture(it.id, it.data) }
+                        ?.sortedBy { it.round } ?: emptyList()
                     trySend(list)
                 }
             awaitClose { reg.remove() }
@@ -358,7 +370,10 @@ object TournamentRepository {
             registeredNames = names,
             startsAt = (data["startsAt"] as? Long) ?: 0L,
             createdAt = (data["createdAt"] as? Long) ?: 0L,
-            roundCount = (data["roundCount"] as? Long)?.toInt() ?: 0
+            roundCount = (data["roundCount"] as? Long)?.toInt() ?: 0,
+            winnerReward = (data["winnerReward"] as? Long)?.toInt() ?: 100,
+            finalLoserReward = (data["finalLoserReward"] as? Long)?.toInt() ?: 50,
+            semiFinalLoserReward = (data["semiFinalLoserReward"] as? Long)?.toInt() ?: 25
         )
     }
 

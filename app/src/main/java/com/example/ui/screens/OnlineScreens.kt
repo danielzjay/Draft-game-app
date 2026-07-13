@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import com.example.ui.components.GameButton
 import com.example.ui.components.GameDangerButton
@@ -20,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -123,7 +127,7 @@ fun RealOnlineMatchScreen(viewModel: GameViewModel) {
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = AmberGold),
                     border = BorderStroke(1.dp, AmberGold)
                 ) {
-                    Text("Play a Bot Instead", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("Practice Offline Instead", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         } else {
@@ -168,6 +172,71 @@ private fun LiveOnlineMatchBoard(viewModel: GameViewModel, match: OnlineMatch) {
                         .padding(horizontal = 10.dp, vertical = 4.dp)
                 ) {
                     Text(if (myTurn) "YOUR TURN" else "THEIR TURN", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val opponentSong = if (amIRed) match.player2Song else match.player1Song
+
+        if (match.status == MatchStatus.ACTIVE && opponentSong.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                border = BorderStroke(1.dp, if (viewModel.isStreamingOpponentMusic) AmberGold else Color(0x33FFC107)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(10.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (viewModel.isStreamingOpponentMusic) Icons.Default.Headset else Icons.Default.MusicNote,
+                            contentDescription = "Music",
+                            tint = if (viewModel.isStreamingOpponentMusic) AmberGold else TextGray,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Column {
+                            Text(
+                                text = if (viewModel.isStreamingOpponentMusic) "STREAMING OPPONENT'S TRACK" else "OPPONENT'S SOUNDTRACK",
+                                color = if (viewModel.isStreamingOpponentMusic) AmberGold else TextGray,
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = opponentSong,
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            if (viewModel.isStreamingOpponentMusic) {
+                                viewModel.stopStreamingOpponentMusic()
+                            } else {
+                                viewModel.startStreamingOpponentMusic(opponentSong, context)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (viewModel.isStreamingOpponentMusic) Color(0xFFEF5350) else AmberGold,
+                            contentColor = if (viewModel.isStreamingOpponentMusic) Color.White else DarkBg
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.height(30.dp)
+                    ) {
+                        Text(
+                            text = if (viewModel.isStreamingOpponentMusic) "Stop Stream" else "Stream live 🎧",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
@@ -218,7 +287,39 @@ private fun LiveOnlineMatchBoard(viewModel: GameViewModel, match: OnlineMatch) {
  */
 @Composable
 private fun SimpleOnlineBoard(viewModel: GameViewModel, match: OnlineMatch, amIRed: Boolean) {
-    val size = viewModel.ruleSystem.boardSize
+    val size = if (match.ruleSystem == "WORLD_DRAUGHTS_FEDERATION") 10 else 8
+    val onlineMandatoryJumps = remember(match.board, match.turnUid) {
+        viewModel.getOnlinePiecesWithMandatoryJumps(match)
+    }
+    val selectedPieceObj = remember(viewModel.selectedOnlineSquare, match.board) {
+        viewModel.selectedOnlineSquare?.let { (r, c) ->
+            match.board.firstOrNull { it.row == r && it.col == c }
+        }
+    }
+    val onlineMovesAndJumps = remember(selectedPieceObj, match.board) {
+        selectedPieceObj?.let { viewModel.onlineMovesAndJumps(it, match.board) } ?: Pair(emptyList(), emptyList())
+    }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "online_mandatory_jump_pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_scale"
+    )
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 0.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_alpha"
+    )
+
     Box(
         modifier = Modifier
             .aspectRatio(1f)
@@ -237,6 +338,9 @@ private fun SimpleOnlineBoard(viewModel: GameViewModel, match: OnlineMatch, amIR
                         val bg = if (isDark) GridDarkSquare else GridLightSquare
                         val piece = match.board.firstOrNull { it.row == row && it.col == col }
                         val isSelected = viewModel.selectedOnlineSquare == Pair(row, col)
+                        val isTargetMove = onlineMovesAndJumps.first.contains(Pair(row, col))
+                        val isTargetJump = onlineMovesAndJumps.second.contains(Pair(row, col))
+                        val isMandatoryJump = piece != null && onlineMandatoryJumps.contains(piece.id)
 
                         Box(
                             modifier = Modifier
@@ -247,10 +351,31 @@ private fun SimpleOnlineBoard(viewModel: GameViewModel, match: OnlineMatch, amIR
                             contentAlignment = Alignment.Center
                         ) {
                             if (isSelected) {
-                                Box(modifier = Modifier.fillMaxSize().background(Color(0x55FFEB3B)))
+                                Box(modifier = Modifier.fillMaxSize().background(Color(0x33FFEB3B)))
+                            }
+                            if (isTargetMove) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .clip(CircleShape)
+                                        .background(GridHighlight)
+                                )
+                            }
+                            if (isTargetJump) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(18.dp)
+                                        .border(1.5.dp, RedCrimson, CircleShape)
+                                        .background(GridAttackHighlight)
+                                )
                             }
                             if (piece != null) {
-                                OnlinePieceView(piece)
+                                OnlinePieceView(
+                                    piece, 
+                                    isMandatoryJump = isMandatoryJump,
+                                    pulseScale = pulseScale,
+                                    pulseAlpha = pulseAlpha
+                                )
                             }
                         }
                     }
@@ -261,19 +386,66 @@ private fun SimpleOnlineBoard(viewModel: GameViewModel, match: OnlineMatch, amIR
 }
 
 @Composable
-private fun OnlinePieceView(piece: OnlineBoardPiece) {
+private fun OnlinePieceView(
+    piece: OnlineBoardPiece, 
+    isMandatoryJump: Boolean = false,
+    pulseScale: Float = 1.0f,
+    pulseAlpha: Float = 0.0f
+) {
     val color = if (piece.isRed) Color(0xFFD32F2F) else Color(0xFF303030)
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(5.dp)
-            .clip(CircleShape)
-            .background(color)
-            .border(BorderStroke(2.dp, if (piece.isKing) AmberGold else Color(0x33FFFFFF)), CircleShape),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxSize()
     ) {
-        if (piece.isKing) {
-            Icon(Icons.Default.Star, contentDescription = "King", tint = AmberGold, modifier = Modifier.size(16.dp))
+        if (isMandatoryJump) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(5.dp)
+                    .graphicsLayer {
+                        scaleX = pulseScale
+                        scaleY = pulseScale
+                        alpha = pulseAlpha
+                    }
+                    .border(2.5.dp, Color(0xFFFF1744), CircleShape)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(5.dp)
+                .clip(CircleShape)
+                .background(color)
+                .border(
+                    BorderStroke(
+                        if (isMandatoryJump) 3.dp else 2.dp,
+                        if (isMandatoryJump) Color(0xFFFF1744) else (if (piece.isKing) AmberGold else Color(0x33FFFFFF))
+                    ),
+                    CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (piece.isKing) {
+                Icon(Icons.Default.Star, contentDescription = "King", tint = AmberGold, modifier = Modifier.size(16.dp))
+            }
+            if (isMandatoryJump) {
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .align(Alignment.TopStart)
+                        .background(Color(0xFFFF1744), CircleShape)
+                        .border(1.dp, Color.White, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PriorityHigh,
+                        contentDescription = "Must Capture",
+                        tint = Color.White,
+                        modifier = Modifier.size(9.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -379,10 +551,23 @@ private fun CreateTournamentDialog(viewModel: GameViewModel, defaultFormat: Stri
     var name by remember { mutableStateOf("") }
     var format by remember { mutableStateOf(defaultFormat) }
     var daysFromNow by remember { mutableStateOf("1") }
+    var ruleSystemSelected by remember { mutableStateOf(com.example.ui.DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION) }
+    var winnerRewardStr by remember { mutableStateOf("100") }
+    var finalLoserRewardStr by remember { mutableStateOf("50") }
+    var semiFinalLoserRewardStr by remember { mutableStateOf("25") }
+
+    val scrollState = androidx.compose.foundation.rememberScrollState()
 
     Dialog(onDismissRequest = { viewModel.isCreateTournamentDialogOpen = false }) {
-        Card(colors = CardDefaults.cardColors(containerColor = DarkSurface), modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(20.dp)) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = DarkSurface),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(scrollState)
+            ) {
                 Text("ORGANIZE A COMPETITION", color = AmberGold, fontSize = 14.sp, fontWeight = FontWeight.Black)
                 Spacer(modifier = Modifier.height(12.dp))
 
@@ -392,6 +577,40 @@ private fun CreateTournamentDialog(viewModel: GameViewModel, defaultFormat: Stri
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("Rule System:", color = TextGray, fontSize = 10.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                val onlineRules = com.example.ui.DraughtsRuleSystem.values()
+                val chunkedOnlineRules = onlineRules.toList().chunked(2)
+                chunkedOnlineRules.forEach { rowRules ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowRules.forEach { rule ->
+                            val isSelected = ruleSystemSelected == rule
+                            val label = when (rule) {
+                                com.example.ui.DraughtsRuleSystem.AMERICAN_CHECKER_FEDERATION -> "ACF (American 8x8)"
+                                com.example.ui.DraughtsRuleSystem.ENGLISH_DRAUGHTS_ASSOCIATION -> "EDA (English 8x8)"
+                                com.example.ui.DraughtsRuleSystem.WORLD_DRAUGHTS_FEDERATION -> "FMJD (Int'l 10x10)"
+                            }
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { ruleSystemSelected = rule },
+                                label = { Text(label, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+                                modifier = Modifier.weight(1f),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AmberGold.copy(alpha = 0.2f),
+                                    selectedLabelColor = AmberGold
+                                )
+                            )
+                        }
+                        if (rowRules.size == 1) {
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text("Format (you decide):", color = TextGray, fontSize = 10.sp)
@@ -415,6 +634,33 @@ private fun CreateTournamentDialog(viewModel: GameViewModel, defaultFormat: Stri
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("Set Tournament Rewards (BLC):", color = AmberGold, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedTextField(
+                    value = winnerRewardStr, onValueChange = { winnerRewardStr = it.filter { c -> c.isDigit() } },
+                    label = { Text("Top Win Reward (1st)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedTextField(
+                    value = finalLoserRewardStr, onValueChange = { finalLoserRewardStr = it.filter { c -> c.isDigit() } },
+                    label = { Text("Final Loser Reward (2nd)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+
+                OutlinedTextField(
+                    value = semiFinalLoserRewardStr, onValueChange = { semiFinalLoserRewardStr = it.filter { c -> c.isDigit() } },
+                    label = { Text("Semi-Final Loser Reward (3rd/4th)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                )
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -422,8 +668,19 @@ private fun CreateTournamentDialog(viewModel: GameViewModel, defaultFormat: Stri
                         onClick = {
                             val days = daysFromNow.toIntOrNull() ?: 1
                             val startsAt = System.currentTimeMillis() + days * 24L * 60 * 60 * 1000
+                            val winRew = winnerRewardStr.toIntOrNull() ?: 100
+                            val loseRew = finalLoserRewardStr.toIntOrNull() ?: 50
+                            val semiRew = semiFinalLoserRewardStr.toIntOrNull() ?: 25
                             if (name.isNotBlank()) {
-                                viewModel.createTournament(name, format, startsAt)
+                                viewModel.createTournament(
+                                    name = name, 
+                                    format = format, 
+                                    startsAt = startsAt,
+                                    ruleSystemName = ruleSystemSelected.name,
+                                    winnerReward = winRew,
+                                    finalLoserReward = loseRew,
+                                    semiFinalLoserReward = semiRew
+                                )
                                 viewModel.isCreateTournamentDialogOpen = false
                             }
                         },

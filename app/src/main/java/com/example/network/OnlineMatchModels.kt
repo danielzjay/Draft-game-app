@@ -40,7 +40,9 @@ data class OnlineMatch(
     val tournamentId: String? = null,
     val fixtureId: String? = null,
     val lastMoveAt: Long = 0L,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val player1Song: String = "",
+    val player2Song: String = ""
 ) {
     companion object {
         const val FORFEIT_WINDOW_MS = 2 * 60 * 60 * 1000L // 2 hours, competitions only
@@ -80,7 +82,10 @@ data class TournamentInfo(
     val registeredNames: Map<String, String> = emptyMap(),
     val startsAt: Long = 0L,
     val createdAt: Long = 0L,
-    val roundCount: Int = 0
+    val roundCount: Int = 0,
+    val winnerReward: Int = 100,
+    val finalLoserReward: Int = 50,
+    val semiFinalLoserReward: Int = 25
 )
 
 object FixtureStatus {
@@ -103,3 +108,25 @@ data class TournamentFixture(
     val status: String = FixtureStatus.SCHEDULED,
     val winnerUid: String? = null
 )
+
+data class OnlinePlayerPresence(
+    val uid: String = "",
+    val name: String = "",
+    val lastSeen: Long = 0L,
+    val mmr: Int = 1000,
+    val ruleSystem: String = "AMERICAN_CHECKER_FEDERATION",
+    val inGame: Boolean = false
+)
+
+data class DirectChallenge(
+    val requestId: String = "",
+    val senderUid: String = "",
+    val senderName: String = "",
+    val receiverUid: String = "",
+    val receiverName: String = "",
+    val ruleSystem: String = "AMERICAN_CHECKER_FEDERATION",
+    val status: String = "PENDING", // PENDING, ACCEPTED, DECLINED
+    val matchId: String? = null,
+    val timestamp: Long = 0L
+)
+

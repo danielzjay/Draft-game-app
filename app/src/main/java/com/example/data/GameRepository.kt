@@ -45,7 +45,7 @@ class GameRepository(private val appDao: AppDao) {
     }
 
     suspend fun updatePlayerState(state: PlayerState) {
-        appDao.updatePlayerState(state)
+        appDao.insertPlayerState(state)
     }
 
     // Interactive Blockchain Miner with customizable transactions
