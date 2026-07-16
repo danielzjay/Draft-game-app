@@ -33,7 +33,7 @@ android {
       if (hasKeystore && !storePass.isNullOrEmpty() && !keyPass.isNullOrEmpty()) {
         storeFile = file(keystorePath!!)
         storePassword = storePass
-        keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
+        keyAlias = System.getenv("KEY_ALIAS") ?: "key0"
         keyPassword = keyPass
       } else {
         // Fallback to debug configuration to prevent build failures when release credentials are not supplied

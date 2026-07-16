@@ -70,10 +70,6 @@ enum class DraughtsRuleSystem(val displayName: String, val boardSize: Int) {
     WORLD_DRAUGHTS_FEDERATION("World Draughts Federation (10x10)", 10)
 }
 
-// Active tab selection
-enum class GameTab {
-    BATTLE, HEROES, STORE, LEADERBOARD, SYNC
-}
 
 enum class AppScreen {
     MAIN_MENU,
@@ -85,6 +81,7 @@ enum class AppScreen {
     ONLINE_COMPETITIONS,
     WALLETS,
     STORE,
+    HEROES,
     SETTINGS,
     MUSIC_SETTINGS,
     NOTIFICATIONS,
@@ -171,7 +168,6 @@ class GameViewModel(
     )
 
     // Active UI screen navigation
-    var currentTab by mutableStateOf(GameTab.BATTLE)
 
     // Gameplay States
     var isVsBot by mutableStateOf(true)
