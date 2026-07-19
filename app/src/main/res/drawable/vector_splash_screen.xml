@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="360dp"
+    android:height="640dp"
+    android:viewportWidth="360"
+    android:viewportHeight="640">
+
+    <!-- Dark Crimson Combat Gradient Background -->
+    <path android:pathData="M0,0 h360 v640 h-360 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="180"
+                android:startY="0"
+                android:endX="180"
+                android:endY="640"
+                android:type="linear">
+                <item android:color="#FF1A0F11" android:offset="0.0" />
+                <item android:color="#FF0D0708" android:offset="0.5" />
+                <item android:color="#FF050203" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle Diagonal Pattern Lines representing draughts/checkers board edges -->
+    <path
+        android:strokeColor="#1F8B0000"
+        android:strokeWidth="1"
+        android:pathData="M-100,100 L500,700 M-100,250 L500,850 M-100,-50 L500,550 M-100,-200 L500,400" />
+    <path
+        android:strokeColor="#1F8B0000"
+        android:strokeWidth="1"
+        android:pathData="M460,100 L-140,700 M460,250 L-140,850 M460,-50 L-140,550 M460,-200 L-140,400" />
+
+    <!-- Big Center Crown Silhouette -->
+    <path
+        android:fillColor="#0DFFD700"
+        android:pathData="M120,350 L240,350 L250,290 L205,315 L180,260 L155,315 L110,290 Z" />
+
+</vector>

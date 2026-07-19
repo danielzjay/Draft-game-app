@@ -48,7 +48,7 @@ class GameRepository(private val appDao: AppDao) {
         appDao.insertPlayerState(state)
     }
 
-    // Interactive Blockchain Miner with customizable transactions
+    // Simple direct transaction logging without cryptographic mining loop
     suspend fun mineNewBlock(
         transactions: String,
         costCoins: Int = 0,
@@ -64,31 +64,16 @@ class GameRepository(private val appDao: AppDao) {
         val existingLedger = appDao.getLedgerDirect()
         val latestBlock = existingLedger.lastOrNull()
         val nextBlockNumber = (latestBlock?.blockNumber ?: -1) + 1
-        val prevHash = latestBlock?.currentHash ?: "0000000000000000000000000000000000000000000000000000000000000000"
+        val prevHash = latestBlock?.currentHash ?: "0000000000000000"
 
         val timestamp = System.currentTimeMillis()
-        var nonce = 0L
-        var finalHash = ""
-
-        // Cryptographic proof-of-work: hash must start with '00' (difficulty prefix)
-        while (true) {
-            finalHash = calculateHash(nextBlockNumber, timestamp, transactions, nonce, prevHash)
-            if (finalHash.startsWith(difficultyPrefix)) {
-                break
-            }
-            nonce++
-            if (nonce > 15000) { // Safeguard to prevent infinite looping
-                break
-            }
-        }
-
         val minedBlock = BlockchainBlock(
             blockNumber = nextBlockNumber,
             timestamp = timestamp,
             transactions = transactions,
-            nonce = nonce,
+            nonce = 0L,
             prevHash = prevHash,
-            currentHash = finalHash
+            currentHash = "0000000000000000"
         )
 
         appDao.insertBlock(minedBlock)

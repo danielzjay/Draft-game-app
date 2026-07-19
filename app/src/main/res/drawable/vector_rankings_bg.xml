@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="360dp"
+    android:height="640dp"
+    android:viewportWidth="360"
+    android:viewportHeight="640">
+
+    <!-- Royal Amber/Golden Dark Gradient -->
+    <path android:pathData="M0,0 h360 v640 h-360 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="180"
+                android:startY="0"
+                android:endX="180"
+                android:endY="640"
+                android:type="linear">
+                <item android:color="#FF241F0D" android:offset="0.0" />
+                <item android:color="#FF0E0C05" android:offset="0.7" />
+                <item android:color="#FF050402" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Star decoration -->
+    <path
+        android:fillColor="#0DFFD700"
+        android:pathData="M180,100 L185,115 L200,115 L188,125 L192,140 L180,130 L168,140 L172,125 L160,115 L175,115 Z" />
+
+    <!-- Glowing circles -->
+    <path
+        android:strokeColor="#12FFD700"
+        android:strokeWidth="1.5"
+        android:pathData="M180,320 m-80,0 a80,80 0,1 1,160 0 a80,80 0,1 1,-160 0" />
+</vector>

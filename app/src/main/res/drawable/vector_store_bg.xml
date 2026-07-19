@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="360dp"
+    android:height="640dp"
+    android:viewportWidth="360"
+    android:viewportHeight="640">
+
+    <!-- Store Dark Rich Gold/Black Gradient Background -->
+    <path android:pathData="M0,0 h360 v640 h-360 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="180"
+                android:startY="0"
+                android:endX="180"
+                android:endY="640"
+                android:type="linear">
+                <item android:color="#FF1C1A10" android:offset="0.0" />
+                <item android:color="#FF0E0D08" android:offset="0.6" />
+                <item android:color="#FF050503" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle Coin/Sparkle Vectors -->
+    <path
+        android:fillColor="#0DFFD700"
+        android:pathData="M50,150 m-15,0 a15,15 0,1 1,30 0 a15,15 0,1 1,-30 0" />
+    <path
+        android:fillColor="#0DFFD700"
+        android:pathData="M310,480 m-20,0 a20,20 0,1 1,40 0 a20,20 0,1 1,-40 0" />
+
+    <!-- Abstract Hexagon Grid overlay -->
+    <path
+        android:strokeColor="#0BFFD700"
+        android:strokeWidth="1.5"
+        android:pathData="M180,20 L240,55 L240,125 L180,160 L120,125 L120,55 Z" />
+</vector>

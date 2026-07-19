@@ -76,18 +76,29 @@ object SoundManager {
     }
 
     /** Plays custom songs using a continuous DJ playlist. */
-    fun playCustomPlaylist(context: Context, uris: List<Uri>, startIndex: Int = 0) {
-        val names = uris.map { uri ->
-            uri.lastPathSegment ?: "Custom Song"
+    fun playCustomPlaylist(context: Context, uris: List<Uri>, startIndex: Int = 0): Boolean {
+        return try {
+            val names = uris.map { uri ->
+                uri.lastPathSegment ?: "Custom Song"
+            }
+            AutoDJEngine.playPlaylist(context, uris, names, startIndex)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
-        AutoDJEngine.playPlaylist(context, uris, names, startIndex)
     }
 
     /** Plays a custom song using a single track source. */
     fun playCustomMusic(context: Context, uri: Uri): Boolean {
-        val name = uri.lastPathSegment ?: "Custom Track"
-        AutoDJEngine.playSingleTrack(context, uri, name)
-        return true
+        return try {
+            val name = uri.lastPathSegment ?: "Custom Track"
+            AutoDJEngine.playSingleTrack(context, uri, name)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
     }
 
     fun setPlaybackSpeed(speed: Float) {

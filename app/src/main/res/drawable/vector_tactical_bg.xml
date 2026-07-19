@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="360dp"
+    android:height="640dp"
+    android:viewportWidth="360"
+    android:viewportHeight="640">
+
+    <!-- Dark Slate Slate/Teal Charcoal Gradient -->
+    <path android:pathData="M0,0 h360 v640 h-360 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="180"
+                android:startY="0"
+                android:endX="180"
+                android:endY="640"
+                android:type="linear">
+                <item android:color="#FF101B1C" android:offset="0.0" />
+                <item android:color="#FF060B0C" android:offset="0.6" />
+                <item android:color="#FF020404" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Board Grid lines representing Draughts lines -->
+    <path
+        android:strokeColor="#0B00F5FF"
+        android:strokeWidth="1"
+        android:pathData="M45,0 L45,640 M90,0 L90,640 M135,0 L135,640 M180,0 L180,640 M225,0 L225,640 M270,0 L270,640 M315,0 L315,640" />
+    <path
+        android:strokeColor="#0B00F5FF"
+        android:strokeWidth="1"
+        android:pathData="M0,80 L360,80 M0,160 L360,160 M0,240 L360,240 M0,320 L360,320 M0,400 L360,400 M0,480 L360,480 M0,560 L360,560" />
+
+</vector>

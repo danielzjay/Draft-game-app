@@ -39,7 +39,7 @@ class PaymentRepository(
         description: String = "Draughts Combat coin purchase"
     ): Result<RelworxPaymentInitResponse> {
         return try {
-            val reference = UUID.randomUUID().toString().replace("-", "").take(20)
+            val reference = UUID.randomUUID().toString().replace("-", "").take(8).uppercase()
             val response = api.requestPayment(
                 RequestPaymentRequest(
                     accountNo = accountNo,
@@ -68,7 +68,7 @@ class PaymentRepository(
         description: String = "Draughts Combat payout"
     ): Result<RelworxPaymentInitResponse> {
         return try {
-            val reference = UUID.randomUUID().toString().replace("-", "").take(20)
+            val reference = UUID.randomUUID().toString().replace("-", "").take(8).uppercase()
             val response = api.sendPayment(
                 SendPaymentRequest(
                     accountNo = accountNo,

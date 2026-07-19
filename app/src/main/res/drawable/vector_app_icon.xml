@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- Background -->
+    <path android:pathData="M0,0h108v108h-108z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="108"
+                android:endY="108"
+                android:startX="0"
+                android:startY="0"
+                android:type="linear">
+                <item android:color="#1A1510" android:offset="0.0" />
+                <item android:color="#2D1F10" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Checker Piece Outer Ring (Shadow) -->
+    <path
+        android:fillColor="#30000000"
+        android:pathData="M54,58m-38,0a38,38 0,1 1,76 0a38,38 0,1 1,-76 0" />
+
+    <!-- Checker Piece Gold Base -->
+    <path
+        android:pathData="M54,54m-36,0a36,36 0,1 1,72 0a36,36 0,1 1,-72 0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:endX="70"
+                android:endY="70"
+                android:startX="38"
+                android:startY="38"
+                android:type="linear">
+                <item android:color="#FFD700" android:offset="0.0" />
+                <item android:color="#DAA520" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Checker Piece Inner Ring -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.5"
+        android:pathData="M54,54m-26,0a26,26 0,1 1,52 0a26,26 0,1 1,-52 0" />
+
+    <path
+        android:strokeColor="#B8860B"
+        android:strokeWidth="1.5"
+        android:pathData="M54,54m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0" />
+
+    <!-- Center Crown for the King Piece -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M42,62 L66,62 L68,50 L59,55 L54,44 L49,55 L40,50 Z" />
+</vector>

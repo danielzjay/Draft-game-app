@@ -131,6 +131,31 @@ fun RealOnlineMatchScreen(viewModel: GameViewModel) {
                 }
             }
         } else {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F1E19)),
+                border = BorderStroke(1.dp, Color(0xFF00E676)),
+                modifier = Modifier.fillMaxWidth(0.85f).padding(bottom = 16.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "ONLINE 1v1 MATCH RULES",
+                        color = Color(0xFF00E676),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "• Match Entry Fee: 50 Coins (500 UGX equivalent)\n" +
+                        "• Winner's Payout: 75 Coins (150% return)\n" +
+                        "• Loser's Comfort: 2 Coins (3% back of fee)\n" +
+                        "• Requirement: You must have at least 50 coins to play. This does not apply to free tournament competitions.",
+                        color = TextWhite,
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp
+                    )
+                }
+            }
+
             GameButton(
                 text = "FIND A REAL OPPONENT",
                 onClick = { viewModel.startRealMatchmaking() },

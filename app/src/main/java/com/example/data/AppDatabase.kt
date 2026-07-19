@@ -243,16 +243,10 @@ abstract class AppDatabase : RoomDatabase() {
 
             // Seed Leaderboard entries
             val initialLeaderboard = listOf(
-                LeaderboardEntry(1, "DraughtsOverlord", 2450, 78.5, "death_knight"),
-                LeaderboardEntry(2, "PixelTactician", 2280, 71.2, "mage"),
-                LeaderboardEntry(3, "BlockMaster", 2100, 68.9, "knight"),
-                LeaderboardEntry(4, "ValkyrieVixen", 1980, 65.0, "valkyrie"),
-                LeaderboardEntry(5, "RogueShadow", 1850, 62.4, "rogue"),
-                LeaderboardEntry(6, "WarlockWhisper", 1720, 59.1, "warlock"),
-                LeaderboardEntry(7, "Slayer3000", 1600, 57.3, "assassin"),
-                LeaderboardEntry(8, "CheckerKing", 1490, 54.2, "knight"),
-                LeaderboardEntry(9, "Grandmaster Checkers", 1200, 50.0, "valkyrie", isCurrentUser = true),
-                LeaderboardEntry(10, "NoobBuster", 1050, 42.1, "necromancer")
+                LeaderboardEntry(1, "GrandmasterX", 1800, 70.0, "assassin"),
+                LeaderboardEntry(2, "Tactician_Femi", 1300, 55.0, "mage"),
+                LeaderboardEntry(3, "Grandmaster Checkers", 1200, 50.0, "valkyrie", isCurrentUser = true),
+                LeaderboardEntry(4, "Rookie_Kato", 900, 40.0, "knight")
             )
             appDao.insertLeaderboard(initialLeaderboard)
         }

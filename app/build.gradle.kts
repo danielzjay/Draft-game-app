@@ -17,21 +17,22 @@ android {
     applicationId = "com.aistudio.draughtscombat.qdvyx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 32
-    versionName = "32.0"
+    versionCode = 47
+    versionName = "47.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
   signingConfigs {
     create("release") {
-      val keystorePath = System.getenv("KEYSTORE_PATH")
-      val hasKeystore = !keystorePath.isNullOrEmpty() && file(keystorePath).exists()
-      val storePass = System.getenv("STORE_PASSWORD")
-      val keyPass = System.getenv("KEY_PASSWORD")
+      val envPath = System.getenv("KEYSTORE_PATH")
+      val keystoreFile = if (!envPath.isNullOrEmpty()) file(envPath) else file("${rootDir}/AwishWorldB1.jks")
+      val hasKeystore = keystoreFile.exists()
+      val storePass = System.getenv("STORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
+      val keyPass = System.getenv("KEY_PASSWORD") ?: storePass
 
       if (hasKeystore && !storePass.isNullOrEmpty() && !keyPass.isNullOrEmpty()) {
-        storeFile = file(keystorePath!!)
+        storeFile = keystoreFile
         storePassword = storePass
         keyAlias = System.getenv("KEY_ALIAS") ?: "key0"
         keyPassword = keyPass

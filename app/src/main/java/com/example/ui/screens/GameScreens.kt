@@ -77,7 +77,7 @@ fun SplashScreenComponent(viewModel: GameViewModel) {
         contentAlignment = Alignment.Center
     ) {
         Image(
-            painter = painterResource(id = R.drawable.img_splash_screen_1783691857912),
+            painter = painterResource(id = R.drawable.vector_splash_screen),
             contentDescription = "Splash background",
             modifier = Modifier.fillMaxSize(),
             contentScale = androidx.compose.ui.layout.ContentScale.Crop
@@ -112,7 +112,7 @@ fun SplashScreenComponent(viewModel: GameViewModel) {
                     .size(110.dp)
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.img_app_icon_1783691822115),
+                    painter = painterResource(id = R.drawable.vector_app_icon),
                     contentDescription = "App Logo",
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
@@ -166,10 +166,10 @@ fun AppBackgroundWrapper(
     content: @Composable BoxScope.() -> Unit
 ) {
     val bgRes = when (activeScreen) {
-        AppScreen.STORE -> R.drawable.img_store_bg_1783856402223
-        AppScreen.GAME_BOT, AppScreen.GAME_LOCAL_PVP, AppScreen.GAME_ONLINE_PVP -> R.drawable.img_battle_bg_1783856416447
-        AppScreen.RANKING -> R.drawable.img_rankings_bg_1783856430416
-        else -> R.drawable.img_tactical_bg_1783856365354
+        AppScreen.STORE -> R.drawable.vector_store_bg
+        AppScreen.GAME_BOT, AppScreen.GAME_LOCAL_PVP, AppScreen.GAME_ONLINE_PVP -> R.drawable.vector_battle_bg
+        AppScreen.RANKING -> R.drawable.vector_rankings_bg
+        else -> R.drawable.vector_tactical_bg
     }
     Box(
         modifier = Modifier
@@ -754,6 +754,46 @@ fun MainMenuRow(
 
 @Composable
 fun OnlineMenuScreen(viewModel: GameViewModel) {
+    if (!viewModel.isGoogleSignedIn) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Cloud,
+                contentDescription = "Online Locked",
+                tint = TextGray,
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "ONLINE BATTLES RESTRICTED",
+                color = AmberGold,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Live 1v1 matchmaking, online tournaments, global challenges, and MMR ranking tables are exclusively available to signed-in players. Link your Google account to play online.",
+                color = TextGray,
+                fontSize = 12.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 16.sp
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = { viewModel.isGoogleAuthDialogOpen = true },
+                colors = ButtonDefaults.buttonColors(containerColor = AmberGold)
+            ) {
+                Text("Link Google Profile", color = DarkBg, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -831,8 +871,9 @@ fun OnlineMenuScreen(viewModel: GameViewModel) {
 @Composable
 fun GameSetupScreen(viewModel: GameViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var currentStep by remember { mutableStateOf(1) }
     val gameMode = viewModel.selectedGameMode
+    val isOnline = gameMode == GameViewModel.SelectedGameMode.ONLINE_MATCHMAKING || gameMode == GameViewModel.SelectedGameMode.COMPETITIONS
+    var currentStep by remember(gameMode) { mutableStateOf(if (isOnline) 2 else 1) }
 
     // Fetch waiting players on online setup screen
     LaunchedEffect(key1 = gameMode) {
@@ -848,60 +889,85 @@ fun GameSetupScreen(viewModel: GameViewModel) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Step Indicator Banner
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
-            border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+        // Step Indicator Banner - Only show step selections for offline modes
+        if (!isOnline) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "TACTICAL BATTLE REGULATOR",
+                            color = AmberGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            text = if (currentStep == 1) "STEP 1: SELECT DRAUGHTS RULEBOOK" else "STEP 2: ENEMY & MATCH DETAILS",
+                            color = TextWhite,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    // Navigation buttons for steps
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { currentStep = 1 },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (currentStep == 1) AmberGold else DarkSurfaceVariant
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text("Step 1", color = if (currentStep == 1) Color.Black else TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = { currentStep = 2 },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (currentStep == 2) AmberGold else DarkSurfaceVariant
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            modifier = Modifier.height(28.dp)
+                        ) {
+                            Text("Step 2", color = if (currentStep == 2) Color.Black else TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        } else {
+            // Simple online header
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
+                border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "TACTICAL BATTLE REGULATOR",
+                        text = "COBALT ONLINE ARENA LOBBY",
                         color = AmberGold,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Black
                     )
                     Text(
-                        text = if (currentStep == 1) "STEP 1: SELECT DRAUGHTS RULEBOOK" else "STEP 2: ENEMY & MATCH DETAILS",
+                        text = "1v1 REAL-TIME MULTIPLAYER",
                         color = TextWhite,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
-                
-                // Navigation buttons for steps
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = { currentStep = 1 },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (currentStep == 1) AmberGold else DarkSurfaceVariant
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Text("Step 1", color = if (currentStep == 1) Color.Black else TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Button(
-                        onClick = { currentStep = 2 },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = if (currentStep == 2) AmberGold else DarkSurfaceVariant
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        modifier = Modifier.height(28.dp)
-                    ) {
-                        Text("Step 2", color = if (currentStep == 2) Color.Black else TextWhite, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
             }
         }
 
-        if (currentStep == 1) {
+        if (!isOnline && currentStep == 1) {
             // STEP 1: Select Rule System
             Text(
                 "SELECT DRAUGHTS COMPAT COMPACT RULES",
@@ -1450,8 +1516,7 @@ fun OfflineBotGameScreen(viewModel: GameViewModel) {
             }
         }
 
-        // Victory banner
-        VictoryBannerHUD(viewModel)
+        // Victory banner removed from here, now displayed as a top-most full-screen overlay
     }
 }
 
@@ -1563,39 +1628,56 @@ fun SelectedPieceHUD(viewModel: GameViewModel) {
 @Composable
 fun VictoryBannerHUD(viewModel: GameViewModel) {
     viewModel.winnerMessage?.let { winnerMsg ->
-        Spacer(modifier = Modifier.height(12.dp))
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xAA0F111A)),
-            border = BorderStroke(2.dp, AmberGold),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.85f))
+                .padding(20.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+            Card(
+                colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                border = BorderStroke(2.dp, AmberGold),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
             ) {
-                Icon(Icons.Default.EmojiEvents, contentDescription = "Victory Trophy", tint = AmberGold, modifier = Modifier.size(48.dp))
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    winnerMsg,
-                    color = AmberGold,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Black,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    "You've been rewarded with 75 BLC and 150 User XP!",
-                    color = TextWhite,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(
-                    onClick = { viewModel.resetGame() },
-                    colors = ButtonDefaults.buttonColors(containerColor = AmberGold)
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("New Match", color = DarkBg, fontWeight = FontWeight.Bold)
+                    Icon(
+                        Icons.Default.EmojiEvents,
+                        contentDescription = "Victory Trophy",
+                        tint = AmberGold,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        winnerMsg,
+                        color = AmberGold,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        "You've been rewarded with 75 BLC and 150 User XP!",
+                        color = TextWhite,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(
+                        onClick = { viewModel.resetGame() },
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text("New Match", color = DarkBg, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
                 }
             }
         }
@@ -1727,8 +1809,7 @@ fun OfflineLocalGameScreen(viewModel: GameViewModel) {
             Text("Reset Local Board", fontSize = 12.sp)
         }
 
-        // Victory banner
-        VictoryBannerHUD(viewModel)
+        // Victory banner removed from here, now displayed as a top-most full-screen overlay
     }
 }
 
@@ -1748,6 +1829,46 @@ fun OnlineCompetitionsScreen(viewModel: GameViewModel) {
 
 @Composable
 fun WalletsScreen(viewModel: GameViewModel) {
+    if (!viewModel.isGoogleSignedIn) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AccountBalanceWallet,
+                contentDescription = "Wallet Locked",
+                tint = TextGray,
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "CRYPTOGRAPHIC WALLET LOCKED",
+                color = AmberGold,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Offline Mode carries no coins or transaction histories. Connect to your secure online profile to access your Relworx mobile money wallet and ledger entries.",
+                color = TextGray,
+                fontSize = 12.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 16.sp
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = { viewModel.isGoogleAuthDialogOpen = true },
+                colors = ButtonDefaults.buttonColors(containerColor = AmberGold)
+            ) {
+                Text("Link Google Profile", color = DarkBg, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
     val playerState by viewModel.playerState.collectAsState()
     val coins = playerState?.draughtCoins ?: 250
     val isPremium = viewModel.isPremiumUser
@@ -1801,29 +1922,14 @@ fun WalletsScreen(viewModel: GameViewModel) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                Button(
+                    onClick = { viewModel.isPaymentPortalOpen = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Button(
-                        onClick = { viewModel.isPaymentPortalOpen = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, tint = DarkBg, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Top Up Coins", color = DarkBg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    }
-
-                    Button(
-                        onClick = { viewModel.triggerNotification("Cryptographic transfer logic requires a linked Google wallet.") },
-                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Send, contentDescription = null, tint = AmberGold, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Send BLC", color = AmberGold, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                    }
+                    Icon(Icons.Default.Add, contentDescription = null, tint = DarkBg, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Top Up Coins", color = DarkBg, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
         }
@@ -3787,9 +3893,14 @@ fun MainGameScreen(
                 DraggableChatWidget(viewModel = viewModel)
             }
 
-            // Cinematic Combat Screen Overlay
-            viewModel.activeCombat?.let { combat ->
-                CombatOverlay(combat = combat)
+            // Cinematic Combat Screen Overlay - Disabled per user request to make gameplay fast and responsive
+            // viewModel.activeCombat?.let { combat ->
+            //     CombatOverlay(combat = combat)
+            // }
+
+            // Victory Banner Overlay on top of the board
+            viewModel.winnerMessage?.let {
+                VictoryBannerHUD(viewModel = viewModel)
             }
 
             // Profile Management Dialog Overlay
@@ -4421,6 +4532,46 @@ fun HeroesScreen(viewModel: GameViewModel) {
 // ==================== SCREEN 3: COSMETIC STORE & BLOCKCHAIN LEDGER ====================
 @Composable
 fun StoreScreen(viewModel: GameViewModel) {
+    if (!viewModel.isGoogleSignedIn) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Lock,
+                contentDescription = "Bazaar Locked",
+                tint = TextGray,
+                modifier = Modifier.size(64.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "COSMETIC BAZAAR LOCKED",
+                color = AmberGold,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Black
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Refill coins, purchase custom board aesthetics, and unlocked piece skins are restricted to online linked accounts. Link your Google account now to enter the secure online ecosystem.",
+                color = TextGray,
+                fontSize = 12.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                lineHeight = 16.sp
+            )
+            Spacer(modifier = Modifier.height(20.dp))
+            Button(
+                onClick = { viewModel.isGoogleAuthDialogOpen = true },
+                colors = ButtonDefaults.buttonColors(containerColor = AmberGold)
+            ) {
+                Text("Link Google Profile", color = DarkBg, fontWeight = FontWeight.Bold)
+            }
+        }
+        return
+    }
+
     val ledgerList by viewModel.ledger.collectAsState()
     val state by viewModel.playerState.collectAsState()
     val coinCount = state?.draughtCoins ?: 0
@@ -4442,7 +4593,7 @@ fun StoreScreen(viewModel: GameViewModel) {
                 fontWeight = FontWeight.Black
             )
             Text(
-                text = "Purchase premium board and piece aesthetics. Every transaction mines a cryptographically secure block into the local ledger chain.",
+                text = "Purchase premium board and piece aesthetics. Every transaction is logged securely in your local account database.",
                 color = TextGray,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 4.dp)
@@ -4576,6 +4727,72 @@ fun StoreScreen(viewModel: GameViewModel) {
                                 Text("EQUIPPED", color = AmberGold, fontSize = 9.sp, fontWeight = FontWeight.Black)
                             } else {
                                 Text("SELECT", color = Color.Cyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Coin Refill Packages Section
+        item {
+            Text(
+                text = "COIN REFILL PACKAGES",
+                color = TextWhite,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                listOf(
+                    Triple("Gladiator Sack", 50, 500.0),
+                    Triple("Vanguard Chest", 500, 5000.0),
+                    Triple("Emperor's Vault", 5500, 50000.0)
+                ).forEach { (pkgName, coins, priceUgx) ->
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                        border = BorderStroke(1.dp, Color(0x1AFFFFFF)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.openPaymentPortal(pkgName, String.format("%,.0f UGX", priceUgx), coins, priceUgx)
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0x1AFFC107)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Paid,
+                                        contentDescription = null,
+                                        tint = AmberGold,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text(pkgName, color = TextWhite, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("+$coins Draught Coins (BLC)", color = Color(0xFF00E676), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.openPaymentPortal(pkgName, String.format("%,.0f UGX", priceUgx), coins, priceUgx)
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                                modifier = Modifier.height(28.dp).testTag("buy_pack_${coins}"),
+                                contentPadding = PaddingValues(horizontal = 12.dp)
+                            ) {
+                                Text(String.format("%,.0f UGX", priceUgx), color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -5409,19 +5626,17 @@ fun SyncScreen(viewModel: GameViewModel) {
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Text(
-                    "Support development and buy digital blockchain coins packages below. Transactions are logged securely.",
+                    "Support development and buy digital coins packages below. Transactions are logged securely.",
                     color = TextGray,
                     fontSize = 10.sp,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
 
                 // Render 3 purchase items
-                // NOTE: prices are now in UGX, not GBP — Relworx does no currency conversion and
-                // only supports UGX/KES/TZS mobile money. Adjust these to your real pricing.
                 val packages = listOf(
-                    Triple("Gladiator Sack", "+500 BLC", "5,000 UGX"),
-                    Triple("Vanguard Chest", "+2,000 BLC", "15,000 UGX"),
-                    Triple("Emperor's Vault", "+10,000 BLC", "50,000 UGX")
+                    Triple("Gladiator Sack", "+50 Coins", "500 UGX"),
+                    Triple("Vanguard Chest", "+500 Coins", "5,000 UGX"),
+                    Triple("Emperor's Vault", "+5,500 Coins", "50,000 UGX")
                 )
 
                 Row(
@@ -5434,13 +5649,13 @@ fun SyncScreen(viewModel: GameViewModel) {
                             border = BorderStroke(1.dp, Color(0x11FFFFFF)),
                             modifier = Modifier.weight(1f).clickable {
                                 val coinsReward = when (pkg.first) {
-                                    "Gladiator Sack" -> 500
-                                    "Vanguard Chest" -> 2000
-                                    else -> 10000
+                                    "Gladiator Sack" -> 50
+                                    "Vanguard Chest" -> 500
+                                    else -> 5500
                                 }
                                 val amountUgx = when (pkg.first) {
-                                    "Gladiator Sack" -> 5000.0
-                                    "Vanguard Chest" -> 15000.0
+                                    "Gladiator Sack" -> 500.0
+                                    "Vanguard Chest" -> 5000.0
                                     else -> 50000.0
                                 }
                                 viewModel.openPaymentPortal(pkg.first, pkg.third, coinsReward, amountUgx)
@@ -5464,6 +5679,110 @@ fun SyncScreen(viewModel: GameViewModel) {
                                 }
                             }
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                Divider(color = Color(0x1AFFFFFF))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    "CUSTOM COIN PURCHASE",
+                    color = AmberGold,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 4.dp)
+                )
+                Text(
+                    "Enter custom amount in UGX. Coins are credited instantly at 1 Coin per 10 UGX. Min: 500 UGX, Max: 4,900,000 UGX.",
+                    color = TextGray,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                var customDepositAmountText by remember { mutableStateOf("") }
+                val parsedAmount = customDepositAmountText.toDoubleOrNull() ?: 0.0
+                val coinsToReceive = (parsedAmount / 10.0).toInt()
+                val customValid = parsedAmount >= 500.0 && parsedAmount <= 4900000.0
+
+                if (customDepositAmountText.isNotEmpty() && !customValid) {
+                    Text(
+                        "Amount must be between 500 and 4,900,000 UGX.",
+                        color = Color(0xFFFF5252),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = customDepositAmountText,
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() }) {
+                                customDepositAmountText = input
+                            }
+                        },
+                        label = { Text("Amount (UGX)", fontSize = 11.sp) },
+                        placeholder = { Text("e.g. 25000", fontSize = 11.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AmberGold,
+                            unfocusedBorderColor = Color.DarkGray,
+                            focusedContainerColor = Color.Black,
+                            unfocusedContainerColor = Color.Black
+                        ),
+                        modifier = Modifier.weight(1.3f),
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontFamily = FontFamily.Monospace),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        )
+                    )
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Coins Reward:", color = TextGray, fontSize = 9.sp)
+                        Text(
+                            text = if (coinsToReceive > 0) "+$coinsToReceive Coins" else "0 Coins",
+                            color = if (coinsToReceive > 0) Color(0xFF00E676) else TextGray,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (customValid) {
+                                viewModel.openPaymentPortal(
+                                    name = "Custom Coin Purchase",
+                                    cost = String.format("%,.0f UGX", parsedAmount),
+                                    coins = coinsToReceive,
+                                    amountUgx = parsedAmount
+                                )
+                            }
+                        },
+                        enabled = customValid,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AmberGold,
+                            disabledContainerColor = Color.DarkGray
+                        ),
+                        modifier = Modifier.weight(1.2f).height(46.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        Text(
+                            "BUY COINS",
+                            color = if (customValid) DarkBg else Color.Gray,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Black
+                        )
                     }
                 }
             }
@@ -5611,9 +5930,9 @@ fun SyncScreen(viewModel: GameViewModel) {
             }
         }
 
-        // SECTION 8: Blockchain Ledger Logger
+        // SECTION 8: Local Account Transaction Logs Logger
         Text(
-            "CRYPTOGRAPHIC TRANSACTION LEDGER", 
+            "LOCAL TRANSACTION LOGS", 
             color = TextWhite, 
             fontSize = 12.sp, 
             fontWeight = FontWeight.Bold, 
@@ -5632,13 +5951,13 @@ fun SyncScreen(viewModel: GameViewModel) {
                 items(currentLedger.reversed()) { block ->
                     Column(modifier = Modifier.padding(vertical = 4.dp)) {
                         Text(
-                            text = "BLOCK #${block.blockNumber} - Hash: ${block.currentHash.take(8)}... Prev: ${block.prevHash.take(8)}...",
+                            text = "TX ID: ${String.format("%04d", block.blockNumber)}",
                             color = AmberGold,
                             fontSize = 9.sp,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
-                            text = "Tx: ${block.transactions}",
+                            text = block.transactions,
                             color = TextWhite,
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
@@ -6529,6 +6848,70 @@ fun ProfileManagementDialog(viewModel: GameViewModel) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Device Passkey Section
+                Text(
+                    text = "DEVICE SECURE PASSKEY",
+                    color = TextWhite,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Start)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (viewModel.isPasskeyConfigured) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0x1100E676), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0x3300E676), RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Passkey Securely Bound", color = Color(0xFF00E676), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(viewModel.passkeyEmail ?: "", color = TextWhite, fontSize = 10.sp)
+                        }
+                        Icon(Icons.Default.VerifiedUser, contentDescription = "Verified Passkey", tint = Color(0xFF00E676), modifier = Modifier.size(20.dp))
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0x0AFFFFFF), RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0x11FFFFFF), RoundedCornerShape(8.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("No Device Passkey Bound", color = TextGray, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text("Register a local passkey to sign in instantly with biometrics next time.", color = TextMuted, fontSize = 9.sp)
+                        }
+                        Button(
+                            onClick = {
+                                if (viewModel.isGoogleSignedIn) {
+                                    viewModel.registerPasskey(
+                                        viewModel.signedInEmail ?: "player@draughts.combat",
+                                        playerState?.playerName ?: "Guest Vanguard"
+                                    )
+                                } else {
+                                    viewModel.triggerNotification("Please link your Google/Email account first before registering a passkey.")
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                            contentPadding = PaddingValues(horizontal = 12.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Icon(Icons.Default.VpnKey, contentDescription = "Passkey", tint = DarkBg, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Bind Passkey", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Button(
                     onClick = { viewModel.isProfileDialogOpen = false },
                     colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
@@ -6760,6 +7143,90 @@ fun GoogleAuthenticationDialog(viewModel: GameViewModel) {
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // PRIMARY / QUICK CONNECTS (Google & Passkey)
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Sign In with Google
+                        Button(
+                            onClick = {
+                                val triggerGoogle = {
+                                    viewModel.startGoogleSignIn(context) {
+                                        viewModel.isGoogleAuthDialogOpen = false
+                                    }
+                                }
+                                if (!viewModel.isTermsAccepted) {
+                                    viewModel.pendingAuthAction = triggerGoogle
+                                    viewModel.showTermsOverlay = true
+                                } else {
+                                    triggerGoogle()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF131314)),
+                            border = BorderStroke(1.dp, Color(0x33FFFFFF)),
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sign In with Google", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Sign In with Passkey
+                        Button(
+                            onClick = {
+                                val triggerPasskey = {
+                                    viewModel.startPasskeySignIn(context) {
+                                        viewModel.isGoogleAuthDialogOpen = false
+                                    }
+                                }
+                                if (!viewModel.isTermsAccepted) {
+                                    viewModel.pendingAuthAction = triggerPasskey
+                                    viewModel.showTermsOverlay = true
+                                } else {
+                                    triggerPasskey()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E293B)),
+                            border = BorderStroke(1.dp, AmberGold.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth().height(42.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VpnKey,
+                                contentDescription = null,
+                                tint = AmberGold,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Sign In with Passkey", color = AmberGold, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // DIVIDER WITH TEXT
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Divider(modifier = Modifier.weight(1f), color = Color(0x1AFFFFFF))
+                        Text(
+                            text = " OR USE EMAIL PROFILE ",
+                            color = TextGray,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                        Divider(modifier = Modifier.weight(1f), color = Color(0x1AFFFFFF))
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -7219,6 +7686,63 @@ fun PremiumPaymentPortalDialog(viewModel: GameViewModel) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                // Editable deposit amount & BLC coins reward inside the checkout dialog
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = if (viewModel.paymentPortalAmountUgx == 0.0) "" else viewModel.paymentPortalAmountUgx.toInt().toString(),
+                        onValueChange = { input ->
+                            if (input.all { it.isDigit() }) {
+                                val newAmount = input.toDoubleOrNull() ?: 0.0
+                                viewModel.paymentPortalAmountUgx = newAmount
+                                viewModel.paymentPortalPackageCoins = (newAmount / 10.0).toInt()
+                                viewModel.paymentPortalPackageCost = String.format("%,.0f UGX", newAmount)
+                            }
+                        },
+                        label = { Text("Deposit Amount (UGX)", fontSize = 11.sp) },
+                        enabled = !viewModel.isValidatingNumber && !viewModel.isProcessingPayment,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AmberGold,
+                            unfocusedBorderColor = Color.DarkGray,
+                            focusedContainerColor = Color.Black,
+                            unfocusedContainerColor = Color.Black
+                        ),
+                        modifier = Modifier.weight(1.3f),
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontFamily = FontFamily.Monospace),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                        )
+                    )
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.Black),
+                        border = BorderStroke(1.dp, Color.DarkGray),
+                        modifier = Modifier.weight(1f).height(56.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("Coins reward:", color = TextGray, fontSize = 8.sp)
+                            Text(
+                                "${viewModel.paymentPortalPackageCoins} BLC",
+                                color = Color(0xFF00E676),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
                 OutlinedTextField(
                     value = viewModel.paymentMobileNumber,
                     onValueChange = {
@@ -7271,6 +7795,26 @@ fun PremiumPaymentPortalDialog(viewModel: GameViewModel) {
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Black
                             )
+                        }
+                    }
+                }
+
+                if (viewModel.paymentActiveReference != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Button(
+                        onClick = { viewModel.checkActivePaymentStatus() },
+                        enabled = !viewModel.isProcessingPayment,
+                        colors = ButtonDefaults.buttonColors(containerColor = AmberGold),
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
+                    ) {
+                        if (viewModel.isProcessingPayment) {
+                            CircularProgressIndicator(color = DarkBg, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Refresh, contentDescription = null, tint = DarkBg, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("CHECK STATUS MANUALLY", color = DarkBg, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                            }
                         }
                     }
                 }
